@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "Automatically clone main thread data to worker thread",
   "keywords": ["web-worker", "webworker", "worker", "postable", "postMessage"],
-  "bin": "bin/index.js",
+  "bin": {
+    "worker-postable": "bin/index.js"
+  },
   "devDependencies": {
     "ts-loader": "^5.3.3",
     "typescript": "^3.3.3",
