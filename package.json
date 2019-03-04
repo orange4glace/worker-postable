@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "description": "Automatically clone main thread data to worker thread",
   "keywords": ["web-worker", "webworker", "worker", "postable", "postMessage"],
-  "directories": {
-    "bin": "./bin"
-  },
+  "bin": "bin/index.js",
   "devDependencies": {
     "ts-loader": "^5.3.3",
     "typescript": "^3.3.3",
@@ -21,7 +19,7 @@
     "build": "webpack --config ./webpack.config.js --mode development",
     "start": "webpack-dev-server --config ./webpack.config.js --mode development --content-base ./dist",
     "test": "ts-node src/comp/test",
-    "test2": "./bin"
+    "test2": "webpack-dev-server"
   },
   "author": "",
   "license": "ISC"
