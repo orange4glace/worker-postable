@@ -1,5 +1,5 @@
 module.exports = [{
-  entry: './index.ts',
+  entry: './test/index.ts',
   target: 'web',
   module: {
     rules: [
@@ -16,7 +16,7 @@ module.exports = [{
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json', '.node']
   },
   output: {
-    path: __dirname + '/dist',
+    path: __dirname + '/test/dist',
     publicPath: '/',
     filename: 'app.js'
   }

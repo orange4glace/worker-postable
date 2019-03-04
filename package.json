@@ -1,27 +1,39 @@
 {
   "name": "worker-postable",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Automatically clone main thread data to worker thread",
-  "keywords": ["web-worker", "webworker", "worker", "postable", "postMessage"],
+  "keywords": [
+    "web-worker",
+    "webworker",
+    "worker",
+    "postable",
+    "postMessage"
+  ],
   "bin": {
-    "worker-postable": "bin/index.js"
+    "worker-postable": "./bin/index"
   },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "devDependencies": {
+    "commander": "^2.19.0",
     "ts-loader": "^5.3.3",
+    "ts-node": "^8.0.2",
     "typescript": "^3.3.3",
     "webpack": "^4.17.2",
     "webpack-cli": "^3.1.0",
-    "webpack-dev-server": "^3.1.11"
+    "webpack-dev-server": "^3.1.11",
+    "worker-loader": "^2.0.0"
   },
   "dependencies": {
     "@types/node": "^11.10.4",
     "mobx": "^5.1.0"
   },
   "scripts": {
-    "build": "webpack --config ./webpack.config.js --mode development",
-    "start": "webpack-dev-server --config ./webpack.config.js --mode development --content-base ./dist",
+    "build": "tsc --p bin/tsconfig.json",
+    "transpile-test": "node bin/transpile -i bin/",
+    "start": "webpack-dev-server --config ./webpack.config.js --mode development --content-base ./test",
     "test": "ts-node src/comp/test",
-    "test2": "webpack-dev-server"
+    "test2": "worker-postable"
   },
   "author": "",
   "license": "ISC"

@@ -1,7 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": "./src",
-    "outDir": "./dist",
     "moduleResolution": "node",
     "experimentalDecorators": true,
     "downlevelIteration": true,
@@ -14,12 +12,7 @@
     "sourceMap": true,
     "listFiles": true
   },
-  "include": [
-    "index.ts",
-    "src/**/*.ts",
-  ],
   "exclude": [
-    "node_modules",
-    "bin"
+    "node_modules"
   ],
 }

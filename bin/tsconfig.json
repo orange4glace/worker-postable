@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "module": "commonjs",
+    "moduleResolution": "node"
+  },
+  "exclude": [
+    "**/node_modules/**"
+  ],
+  "files": [
+    "transpile.ts"
+  ]
+}

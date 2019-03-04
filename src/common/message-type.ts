@@ -1,4 +1,4 @@
-import { postable_object_id_t } from 'common/type_t'
+import { postable_object_id_t } from '../common/type_t'
 
 interface ObjectCreated {
   type: string,

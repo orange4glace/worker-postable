@@ -1,34 +1,105 @@
-import { postable_object_id_t } from 'common/type_t'
-import { ObjectCreated, ValueUpdated } from 'common/message-type'
+import { postable_object_id_t } from '../common/type_t'
+import { ObjectCreated, ValueUpdated } from '../common/message-type'
 
-const ObjectStore = new Map<postable_object_id_t, Object>();
+const ObjectStore = new Map<postable_object_id_t, any>();
 const ConstructorStore = new Map<string, any>();
 
-self.onmessage = function (msg) {
+ConstructorStore.set('Array', Array.prototype.constructor);
+ConstructorStore.set('ObservableSet$$1', Set.prototype.constructor);
+ConstructorStore.set('ObservableMap$$1', Map.prototype.constructor);
+
+const postableMessageHandler = function (msg) {
   const data = msg.data;
   switch (data.type) {
     case 'object-created':
       createObject(data);
       break;
-    case 'value-updated':
-      updateValue(data);
+    case 'object-updated':
+      updateObject(data);
+      break;
+    case 'map-update':
+      updateMap(data);
+      break;
+    case 'map-add':
+      addMap(data);
+      break;
+    case 'map-delete':
+      deleteMap(data);
+      break;
+    case 'set-add':
+      addSet(data);
+      break;
+    case 'set-delete':
+      deleteSet(data);
+      break;
+    case 'array-update':
+      updateArray(data);
+      break;
+    case 'array-splice':
+      spliceArray(data);
       break;
   }
 }
 
+function deserialize(d) {
+  if (d.valueType == 'primitive') return d.value;
+  return ObjectStore.get(d.value);
+}
+
 function createObject(data: ObjectCreated) {
-  const constructor = ConstructorStore[data.constructor];
-  const object = constructor();
+  const constructor = ConstructorStore.get(data.constructor);
+  const object = new constructor();
   ObjectStore.set(data.id, object);
 }
 
-function updateValue(data: ValueUpdated) {
+function updateObject(data: ValueUpdated) {
   const object = ObjectStore.get(data.object);
-  console.assert(object);
-  if (data.valueType == 'object') {
-    const value = ObjectStore.get((data.value as postable_object_id_t));
-    console.assert(value);
-    object[data.property] = value;
-  }
-  else object[data.property] = data.value;
+  object[data.property] = deserialize(data.value);
+}
+
+function updateMap(data: any) {
+  const object: Map<any, any> = ObjectStore.get(data.object);
+  object.set(
+    deserialize(data.name),
+    deserialize(data.newValue))
+}
+
+function addMap(data: any) {
+  const object: Map<any, any> = ObjectStore.get(data.object);
+  object.set(
+    deserialize(data.name),
+    deserialize(data.newValue))
+}
+
+function deleteMap(data: any) {
+  const object: Map<any, any> = ObjectStore.get(data.object);
+  object.delete(
+    deserialize(data.name))
+}
+
+function addSet(data: any) {
+  const object: Set<any> = ObjectStore.get(data.object);
+  object.add(deserialize(data.newValue))
+}
+
+function deleteSet(data: any) {
+  const object: Set<any> = ObjectStore.get(data.object);
+  object.delete(deserialize(data.newValue))
+}
+
+function updateArray(data: any) {
+  const object: Array<any> = ObjectStore.get(data.object);
+  object[data.index] = deserialize(data.newValue);
+}
+
+function spliceArray(data: any) {
+  const object: Array<any> = ObjectStore.get(data.object);
+  data.added = data.added.map(d => deserialize(d))
+  object.splice(data.index, data.removedCount, data.added);
+}
+
+export {
+  ConstructorStore,
+  ObjectStore,
+  postableMessageHandler
 }
