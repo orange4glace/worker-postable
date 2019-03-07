@@ -1,14 +1,30 @@
-import { observable, extendObservable, observe } from 'mobx'
-import { ObservableValue, IArraySplice, IArrayChange, IObjectDidChange, IMapDidChange } from 'mobx/lib/internal';
+import { observable, IArraySplice, IArrayChange, observe, ObservableSet, ObservableMap } from 'mobx'
+
+const DEBUG = process.env.NODE_ENV !== "production";
 
 const POSTABLE_ID_SYMBOL = Symbol('postable_id')
+const POSTABLE_REF_COUNT = Symbol('postable_ref_count')
+const POSTABLE_PROPS = Symbol('postable_props')
+const POSTABLE_OBSERVE_DISPOSERS = Symbol('postable_observe_disposers')
+const POSTABLE_FUNC_POST_CREATED = Symbol('postable_func_post_created')
+const POSTABLE_FUNC_POST_DESTROIED = Symbol('postable_func_post_destroied')
+
+export const OBFUSCATED_ERROR =
+    "An invariant failed, however the error is obfuscated because this is an production build."
+function invariant(check: boolean, message?: string | boolean) {
+  if (!check) throw new Error("[mobx] " + (message || OBFUSCATED_ERROR))
+}
 
 interface Context {
-  worker: Worker
+  onMesssage: (message: any)=>void;
 }
 
 let context: Context = {
-  worker: null
+  onMesssage: ()=>{}
+}
+
+function isObject(value: any) {
+  return (typeof value === 'object' && value != null)
 }
 
 let __next_postable_object_id = 0;
@@ -19,125 +35,251 @@ function getNextPostableObjectID() {
 function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
   const handler:ProxyHandler<T> = {
     construct: function(target, args) {
-      let obj = Object.create(constructor.prototype);
-      target.apply(obj, args);
-      if (!obj.hasOwnProperty(POSTABLE_ID_SYMBOL)) {
-        Object.defineProperty(obj, POSTABLE_ID_SYMBOL, {
-          value: getNextPostableObjectID(),
-          writable: false
-        })
-        postObjectCreated(obj);
-      }
-      return obj;
+      let instance = Object.create(constructor.prototype);
+      target.apply(instance, args);
+      asPostableObject(instance);
+      return instance;
     }
   }
   return new Proxy(constructor, handler)
 }
 
-function postable(target: any, prop: string): any {
-
-  function intializer(target: any, prop: string) {
-    if (!this.hasOwnProperty(POSTABLE_ID_SYMBOL)) {
-      Object.defineProperty(this, POSTABLE_ID_SYMBOL, {
-        value: getNextPostableObjectID(),
-        writable: false
-      })
-      postObjectCreated(this);
-    }
-    extendObservable(this, {
-      ['__'+prop]: 0
-    });
-    observe(this, '__'+prop, change=> {
-      if (change.type == 'update') {
-        if (typeof change.newValue == 'object') {
-          let value = change.newValue as any;
-          if (!value.hasOwnProperty(POSTABLE_ID_SYMBOL)) {
-            Object.defineProperty(value, POSTABLE_ID_SYMBOL, {
-              value: getNextPostableObjectID(),
-              writable: false
-            })
-            postObjectCreated(value);
+function postable(target: any, prop: string) {
+  // Define property to __proto__
+  if (!target.hasOwnProperty(POSTABLE_PROPS)) {
+    Object.defineProperty(target, POSTABLE_PROPS, {
+      enumerable: false,
+      writable: true,
+      configurable: true,
+      value: new Set()
+    })
+    Object.defineProperty(target, POSTABLE_FUNC_POST_CREATED, {
+      enumerable: false,
+      writable: false,
+      configurable: false,
+      value: function() {
+        let props: any = {};
+        (this[POSTABLE_PROPS] as Set<string>).forEach(prop => {
+          let value = this[prop];
+          if (isObject(value)) {
+            asPostableObject(value);
+            ref(value);
           }
-          const objectType = value.constructor.name;
-          if (objectType == 'Array') observeArray(value);
-          if (objectType == 'ObservableSet$$1') observeSet(value);
-          if (objectType == 'ObservableMap$$1') observeMap(value);
-        }
-        postObjectUpdated(this, prop, change.newValue);
-      }
-    })
-    Object.defineProperty(this, prop, {
-      configurable: true,
-      get() {
-        return this['__'+prop];
-      },
-      set(value) {
-        this['__'+prop] = value;
-      }
-    })
-  }
+          props[prop] = serialize(value);
+        })
+        postMessage({
+          type: 'object-created',
+          constructor: this.constructor.name,
+          id: this[POSTABLE_ID_SYMBOL],
+          props: props
+        });
 
-  function gee(target: any, prop: string) {
-    return {
-      configurable: true,
-      get() {
-        intializer.call(this, target, prop);
-        return this[prop];
-      },
-      set(value) {
-        intializer.call(this, target, prop);
-        return this[prop] = value;
-      }
-    }
-  }
+        (this[POSTABLE_PROPS] as Set<string>).forEach(prop => {
+          this[POSTABLE_OBSERVE_DISPOSERS].add(observe(this, prop, change => {
+            if (change.type == 'update') {
+              let oldValue = change.oldValue as any
+              if (isObject(oldValue)) unref(oldValue);
 
-  return gee.apply(this, arguments);
-/*
-  if (!target.hasOwnProperty('__postable_id')) {
-    Object.defineProperty(target, "__postable_id", {
-      value: getNextPostableObjectID(),
-      writable: false
-    })
-    postObjectCreated(target);
-  }
-  extendObservable(target, {
-    [key]: target[key]
-  });
-  observe(target, key, change=> {
-    if (change.type == 'update') {
-      if (typeof change.newValue == 'object') {
-        let value = change.newValue as any;
-        if (!value.hasOwnProperty('__postable_id')) {
-          Object.defineProperty(value, '__postable_id', {
-            value: getNextPostableObjectID(),
-            writable: false
-          })
-          postObjectCreated(value);
-        }
+              let value = change.newValue as any;
+              if (isObject(value)) {
+                let postable = asPostableObject(value);
+                invariant(postable, `[postable] ${value} is not a Postable object.`);
+                ref(postable);
+              }
+              postMessage({
+                type: 'object-updated',
+                object: this[POSTABLE_ID_SYMBOL],
+                property: prop,
+                value: serialize(value)
+              })
+            }
+          }))
+        })
+        
       }
-      postValueUpdated(target, key, change.newValue);
-    }
+    })
+    Object.defineProperty(target, POSTABLE_FUNC_POST_DESTROIED, {
+      enumerable: false,
+      writable: false,
+      configurable: false,
+      value: function() {
+        (this[POSTABLE_PROPS] as Set<string>).forEach(prop => {
+          let value = this[prop];
+          if (typeof value == 'object' && value != null) unref(value);
+        });
+        (this[POSTABLE_OBSERVE_DISPOSERS] as Set<any>).forEach(disposer => {
+          disposer();
+        });
+        postMessage({
+          type: 'object-destroied',
+          id: this[POSTABLE_ID_SYMBOL]
+        });
+
+        this[POSTABLE_OBSERVE_DISPOSERS].forEach(disposer => disposer())
+        this[POSTABLE_OBSERVE_DISPOSERS].clear();
+      }
+    })
+  }
+  target[POSTABLE_PROPS].add(prop);
+  return observable(target, prop);
+}
+
+
+
+Object.defineProperty(Array.prototype, POSTABLE_FUNC_POST_CREATED, {
+  enumerable: false,
+  writable: false,
+  configurable: false,
+  value: function() {
+    let values = [];
+    (this as Array<any>).forEach(el => {
+      if (isObject(el)) ref(el);
+      values.push(serialize(el))
+    });
+    postMessage({
+      type: 'object-created',
+      constructor: this.constructor.name,
+      id: this[POSTABLE_ID_SYMBOL],
+      values: values
+    });
+    this[POSTABLE_OBSERVE_DISPOSERS].add(observeArray(this));
+  }
+})
+Object.defineProperty(Array.prototype, POSTABLE_FUNC_POST_DESTROIED, {
+  enumerable: false,
+  writable: false,
+  configurable: false,
+  value: function() {
+    (this as Array<any>).forEach(el => {
+      if (isObject(el)) unref(el);
+    });
+    (this[POSTABLE_OBSERVE_DISPOSERS] as Set<any>).forEach(disposer => {
+      disposer();
+    });
+    postMessage({
+      type: 'object-destroied',
+      id: this[POSTABLE_ID_SYMBOL]
+    });
+    this[POSTABLE_OBSERVE_DISPOSERS].forEach(disposer => disposer())
+    this[POSTABLE_OBSERVE_DISPOSERS].clear();
+  }
+})
+
+Object.defineProperty(ObservableSet.prototype, POSTABLE_FUNC_POST_CREATED, {
+  enumerable: false,
+  writable: false,
+  configurable: false,
+  value: function() {
+    let values = [];
+    (this as Set<any>).forEach(el => {
+      if (isObject(el)) ref(el);
+      values.push(serialize(el))
+    });
+    postMessage({
+      type: 'object-created',
+      constructor: this.constructor.name,
+      id: this[POSTABLE_ID_SYMBOL],
+      values: values
+    });
+    this[POSTABLE_OBSERVE_DISPOSERS].add(observeSet(this));
+  }
+})
+Object.defineProperty(ObservableSet.prototype, POSTABLE_FUNC_POST_DESTROIED, {
+  enumerable: false,
+  writable: false,
+  configurable: false,
+  value: function() {
+    (this as Set<any>).forEach(el => {
+      if (isObject(el)) unref(el);
+    });
+    (this[POSTABLE_OBSERVE_DISPOSERS] as Set<any>).forEach(disposer => {
+      disposer();
+    });
+    postMessage({
+      type: 'object-destroied',
+      id: this[POSTABLE_ID_SYMBOL]
+    });
+    this[POSTABLE_OBSERVE_DISPOSERS].forEach(disposer => disposer())
+    this[POSTABLE_OBSERVE_DISPOSERS].clear();
+  }
+})
+
+Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_CREATED, {
+  enumerable: false,
+  writable: false,
+  configurable: false,
+  value: function() {
+    let values = [];
+    (this as Map<any, any>).forEach((k, v) => {
+      if (isObject(v)) ref(v);
+      if (isObject(k)) ref(k);
+      values.push([serialize(k), serialize(v)])
+    });
+    postMessage({
+      type: 'object-created',
+      constructor: this.constructor.name,
+      id: this[POSTABLE_ID_SYMBOL],
+      values: values
+    });
+    this[POSTABLE_OBSERVE_DISPOSERS].add(observeMap(this));
+  }
+})
+Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_DESTROIED, {
+  enumerable: false,
+  writable: false,
+  configurable: false,
+  value: function() {
+    (this as Map<any, any>).forEach((k, v) => {
+      if (isObject(k)) unref(k);
+      if (isObject(v)) unref(v);
+    });
+    (this[POSTABLE_OBSERVE_DISPOSERS] as Set<any>).forEach(disposer => {
+      disposer();
+    });
+    postMessage({
+      type: 'object-destroied',
+      id: this[POSTABLE_ID_SYMBOL]
+    });
+    this[POSTABLE_OBSERVE_DISPOSERS].forEach(disposer => disposer())
+    this[POSTABLE_OBSERVE_DISPOSERS].clear();
+  }
+})
+
+function asPostableObject(target: any) {
+  if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED)) return null;
+  if (target.hasOwnProperty(POSTABLE_ID_SYMBOL)) return target;
+  Object.defineProperty(target, POSTABLE_ID_SYMBOL, {
+    enumerable: false,
+    writable: false,
+    configurable: false,
+    value: getNextPostableObjectID()
   })
-  */
-}
-
-function postObjectCreated(object: any) {
-  postMessage({
-    type: 'object-created',
-    constructor: object.constructor.name,
-    id: object[POSTABLE_ID_SYMBOL]
-  });
-}
-
-function postObjectUpdated(object: any, property: string, value: any) {
-  postMessage({
-    type: 'object-updated',
-    object: object[POSTABLE_ID_SYMBOL],
-    property: property,
-    value: serialize(value)
+  Object.defineProperty(target, POSTABLE_REF_COUNT, {
+    enumerable: false,
+    writable: true,
+    configurable: false,
+    value: 0
   })
+  Object.defineProperty(target, POSTABLE_OBSERVE_DISPOSERS, {
+    enumerable: false,
+    writable: false,
+    configurable: false,
+    value: new Set()
+  })
+  return target;
 }
 
+function ref(object: any) {
+  if (object[POSTABLE_REF_COUNT] == 0)
+    object[POSTABLE_FUNC_POST_CREATED].call(object);
+  object[POSTABLE_REF_COUNT]++;
+}
+
+function unref(object: any) {
+  object[POSTABLE_REF_COUNT]--;
+  if (object[POSTABLE_REF_COUNT] == 0)
+    object[POSTABLE_FUNC_POST_DESTROIED].call(object);
+}
 
 
 function serialize(d: any) {
@@ -154,7 +296,7 @@ function serialize(d: any) {
 
 
 function observeMap(data: any) {
-  observe(data, change => {
+  return observe(data, change => {
     if (change.type == 'update') postMapUpdate(change);
     else if (change.type == 'add') postMapAdd(change);
     else if (change.type == 'delete') postMapDelete(change);
@@ -162,49 +304,53 @@ function observeMap(data: any) {
 }
 
 function postMapUpdate(c: any) {
+  if (isObject(c.newValue)) ref(c.newValue);
+  if (isObject(c.oldValue)) unref(c.oldValue);
   c.type = 'map-update';
   c.object = c.object[POSTABLE_ID_SYMBOL];
   c.name = serialize(c.name);
   c.newValue = serialize(c.newValue);
-  delete c.oldValue;
+  c.oldValue = serialize(c.oldValue);
   postMessage(c);
 }
 
 function postMapAdd(c: any) {
+  if (isObject(c.newValue)) ref(c.newValue);
   c.type = 'map-add';
   c.object = c.object[POSTABLE_ID_SYMBOL];
   c.name = serialize(c.name);
   c.newValue = serialize(c.newValue);
-  delete c.oldValue;
   postMessage(c);
 }
 
 function postMapDelete(c: any) {
+  if (isObject(c.oldValue)) unref(c.oldValue);
   c.type = 'map-delete';
   c.object = c.object[POSTABLE_ID_SYMBOL];
   c.name = serialize(c.name);
-  delete c.oldValue;
+  c.oldValue = serialize(c.oldValue);
   postMessage(c);
 }
 
 
 
 function observeSet(data: any) {
-  observe(data, change => {
+  return observe(data, change => {
     if ((change.type as any) == 'add') postSetAdd(change);
     if ((change.type as any) == 'delete') postSetDelete(change);
   })
 }
 
 function postSetAdd(c: any) {
+  if (isObject(c.newValue)) ref(c.newValue);
   c.type = 'set-add';
   c.object = c.object[POSTABLE_ID_SYMBOL];
   c.newValue = serialize(c.newValue);
-  delete c.oldValue;
   postMessage(c);
 }
 
 function postSetDelete(c: any) {
+  if (isObject(c.oldValue)) unref(c.oldValue);
   c.type = 'set-delete';
   c.object = c.object[POSTABLE_ID_SYMBOL];
   c.oldValue = serialize(c.oldvalue);
@@ -214,42 +360,47 @@ function postSetDelete(c: any) {
 
 
 function observeArray(data: any) {
-  observe(data, change => {
+  return observe(data, change => {
     if (change.type == 'update') postArrayUpdate(change as unknown as IArrayChange);
     else if (change.type == 'splice') postArraySplice(change as unknown as IArraySplice);
   })
 }
 
-function postArrayUpdate(data: any) {
-  data.type = 'array-update';
-  data.object = data.object[POSTABLE_ID_SYMBOL];
-  data.newValue = serialize(data.newValue);
-  data.oldValue = serialize(data.oldValue);
-  postMessage(data);
+function postArrayUpdate(c: any) {
+  if (isObject(c.newValue)) ref(c.newValue);
+  if (isObject(c.oldValue)) unref(c.oldValue);
+  c.type = 'array-update';
+  c.object = c.object[POSTABLE_ID_SYMBOL];
+  c.newValue = serialize(c.newValue);
+  c.oldValue = serialize(c.oldValue);
+  postMessage(c);
 }
 
-function postArraySplice(data: any) {
-  data.type = 'array-splice';
-  data.object = data.object[POSTABLE_ID_SYMBOL];
-  data.added = data.added.map(d => serialize(d))
-  data.removed = data.removed.map(d => serialize(d))
-  postMessage(data);
+function postArraySplice(c: any) {
+  c.type = 'array-splice';
+  c.object = c.object[POSTABLE_ID_SYMBOL];
+  c.added = c.added.map(d => {
+    if (isObject(d)) ref(d);
+    serialize(d)
+  })
+  c.removed = c.removed.map(d => {
+    if (isObject(d)) unref(d);
+    serialize(d)
+  })
+  postMessage(c);
 }
 
 
 
 
 function postMessage(message: any) {
-  console.log('POST', message)
-  context.worker.postMessage(message);
-}
-
-function registerWorker(worker: Worker) {
-  context.worker = worker;
+  context.onMesssage(message);
 }
 
 export {
   Postable,
   postable,
-  registerWorker
+  ref,
+  unref,
+  context
 }

@@ -1,6 +1,6 @@
 {
   "name": "worker-postable",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "Automatically clone main thread data to worker thread",
   "keywords": [
     "web-worker",
@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@types/node": "^11.10.4",
+    "eventemitter2": "^5.0.1",
     "mobx": "^5.1.0"
   },
   "scripts": {

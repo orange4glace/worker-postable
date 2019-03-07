@@ -1,14 +1,18 @@
 import { postable_object_id_t } from '../common/type_t'
 import { ObjectCreated, ValueUpdated } from '../common/message-type'
 
+import { EventEmitter2 } from 'eventemitter2'
+
 const ObjectStore = new Map<postable_object_id_t, any>();
 const ConstructorStore = new Map<string, any>();
+const ee = new EventEmitter2();
 
 ConstructorStore.set('Array', Array.prototype.constructor);
 ConstructorStore.set('ObservableSet$$1', Set.prototype.constructor);
 ConstructorStore.set('ObservableMap$$1', Map.prototype.constructor);
 
 const postableMessageHandler = function (msg) {
+  console.log(msg);
   const data = msg.data;
   switch (data.type) {
     case 'object-created':
@@ -39,6 +43,7 @@ const postableMessageHandler = function (msg) {
       spliceArray(data);
       break;
   }
+  ee.emit('message', data);
 }
 
 function deserialize(d) {
@@ -50,6 +55,11 @@ function createObject(data: ObjectCreated) {
   const constructor = ConstructorStore.get(data.constructor);
   const object = new constructor();
   ObjectStore.set(data.id, object);
+  ee.emit('object-created', {
+    id: data.id,
+    type: data.constructor,
+    object: object
+  });
 }
 
 function updateObject(data: ValueUpdated) {
@@ -101,5 +111,6 @@ function spliceArray(data: any) {
 export {
   ConstructorStore,
   ObjectStore,
-  postableMessageHandler
+  postableMessageHandler,
+  ee as eventemitter
 }

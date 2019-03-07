@@ -1,18 +1,27 @@
-import { Postable, postable, registerWorker } from './../index'
-import MyWorker from 'worker-loader!./worker'
-
-var worker = new MyWorker();
-registerWorker(worker);
+import { Postable, postable, ref, unref } from "../src/server/postable";
+import { autorun } from "./mobx/mobx";
 
 @Postable
-class A{
-  @postable observ: any = 7;
-
-  constructor() {
-  }
+class A {
+  @postable value;
 }
 
-var a = new A();
-var b = new A();
-a.observ = b;
-b.observ = 8;
+let a = new A();
+let b = new A();
+let c = new A();
+let set = new Set()
+set.add(b);
+set.add(5);
+a.value = set;
+
+ref(a);
+
+console.log(a);
+
+a.value.add(5);
+a.value.add(6);
+a.value.add(c);
+
+unref(a);
+
+a.value = 7;
