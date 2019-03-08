@@ -1,4 +1,3 @@
-export declare const OBFUSCATED_ERROR = "An invariant failed, however the error is obfuscated because this is an production build.";
 interface Context {
     onMesssage: (message: any) => void;
 }

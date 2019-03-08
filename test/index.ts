@@ -1,27 +1,39 @@
-import { Postable, postable, ref, unref } from "../src/server/postable";
-import { autorun } from "./mobx/mobx";
+import { Postable, postable, ref, unref, context } from "../src/server/postable";
+import Worker from 'worker-loader!./worker';
 
 @Postable
 class A {
-  @postable value;
+  @postable color: string;
+  @postable score: number = 5;
+
+  name = 'name'
 }
 
-let a = new A();
-let b = new A();
-let c = new A();
-let set = new Set()
-set.add(b);
-set.add(5);
-a.value = set;
+@Postable
+class B {
+  @postable name = 'sando';
+  @postable grade = 5;
 
-ref(a);
+  speed = 37
+}
 
-console.log(a);
+@Postable
+class C extends B {
+  @postable wheel;
+}
 
-a.value.add(5);
-a.value.add(6);
-a.value.add(c);
+let worker = new Worker();
+context.onMesssage = msg => {
+  worker.postMessage(msg);
+}
 
-unref(a);
+let a1 = new A();
+let b1 = new B();
+let c1 = new C();
 
-a.value = 7;
+ref(a1)
+a1.name = 'skir'
+a1.color = 'hello'
+c1.wheel = [];
+for (var i = 0; i < 0; i ++) c1.wheel.push(new B());
+ref(c1)

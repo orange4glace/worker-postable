@@ -1,5 +1,5 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
+exports.__esModule = true;
 console.log('test');
 // this example will create a simple typescript source file programmatically, parse it to AST Nodes and then 
 // use TypeScript Transformations to manipulate some ot its nodes (changing  particular arithmetic expressions). 
@@ -87,17 +87,8 @@ function __pregenerate(node, usingClasses) {
                 if (deco.expression.getText() == 'Postable')
                     postable = true;
             });
-        if (postable) {
+        if (postable)
             usingClasses.add(node.name.getText());
-            if (node.heritageClauses)
-                node.heritageClauses.forEach(function (hc) {
-                    hc.types.forEach(function (t) {
-                        if (t) {
-                            usingClasses.add(t.getText());
-                        }
-                    });
-                });
-        }
     }
     generate(node);
 }
@@ -118,7 +109,18 @@ function __generate(node, usingClasses, result) {
                     properties.push(n);
             }
         });
-        result.push(ts.createClassDeclaration(null, null, node.name, null, null, properties));
+        var impls = [];
+        if (node.heritageClauses)
+            node.heritageClauses.forEach(function (hc) {
+                hc.types.forEach(function (t) {
+                    if (t) {
+                        if (usingClasses.has(t.getText()))
+                            impls.push(t);
+                    }
+                });
+            });
+        var heritage = impls.length ? [ts.createHeritageClause(ts.SyntaxKind.ExtendsKeyword, impls)] : null;
+        result.push(ts.createInterfaceDeclaration(null, null, node.name, null, heritage, properties));
     }
     function visitPropertyDeclaration(node) {
         var postable = false;
@@ -129,7 +131,7 @@ function __generate(node, usingClasses, result) {
             });
         }
         if (postable)
-            return ts.createProperty(null, null, node.name.getText(), node.questionToken, node.type, null);
+            return ts.createPropertySignature(null, node.name.getText(), node.questionToken, node.type, null);
         return null;
     }
     generate(node);
@@ -137,12 +139,13 @@ function __generate(node, usingClasses, result) {
 function __generateExports(classes) {
     var specs = [];
     classes.forEach(function (node) {
-        specs.push(ts.createExportSpecifier(node.name.getText(), node.name.getText()));
+        specs.push(ts.createExportSpecifier(node.name.getText(), 'I' + node.name.getText()));
     });
-    specs.push(ts.createExportSpecifier('registerPostable', 'registerPostable'));
+    // specs.push(ts.createExportSpecifier('registerPostable', 'registerPostable'));
     return ts.createExportDeclaration(null, null, ts.createNamedExports(specs));
 }
 function __generateRegister(classes) {
+    return '';
     var str = '';
     for (var i = 0; i < classes.length; i++) {
         var node = classes[i];

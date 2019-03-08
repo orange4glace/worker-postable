@@ -1,16 +1,11 @@
 import { observable, observe, ObservableSet, ObservableMap } from 'mobx';
+import { MessageType } from '../common/message-type';
+import { invariant } from '../common/util';
 var DEBUG = process.env.NODE_ENV !== "production";
-var POSTABLE_ID_SYMBOL = Symbol('postable_id');
-var POSTABLE_REF_COUNT = Symbol('postable_ref_count');
 var POSTABLE_PROPS = Symbol('postable_props');
-var POSTABLE_OBSERVE_DISPOSERS = Symbol('postable_observe_disposers');
 var POSTABLE_FUNC_POST_CREATED = Symbol('postable_func_post_created');
 var POSTABLE_FUNC_POST_DESTROIED = Symbol('postable_func_post_destroied');
-export var OBFUSCATED_ERROR = "An invariant failed, however the error is obfuscated because this is an production build.";
-function invariant(check, message) {
-    if (!check)
-        throw new Error("[mobx] " + (message || OBFUSCATED_ERROR));
-}
+var POSTABLE_ADMINISTRATOR = Symbol('postable_administrator');
 var context = {
     onMesssage: function () { }
 };
@@ -47,23 +42,23 @@ function postable(target, prop) {
             configurable: false,
             value: function () {
                 var _this = this;
-                var props = {};
+                var props = [];
                 this[POSTABLE_PROPS].forEach(function (prop) {
                     var value = _this[prop];
                     if (isObject(value)) {
                         asPostableObject(value);
                         ref(value);
                     }
-                    props[prop] = serialize(value);
+                    props.push([prop, serialize(value)]);
                 });
                 postMessage({
-                    type: 'object-created',
+                    type: MessageType.OBJECT_CREATED,
                     constructor: this.constructor.name,
-                    id: this[POSTABLE_ID_SYMBOL],
+                    id: this[POSTABLE_ADMINISTRATOR].id,
                     props: props
                 });
                 this[POSTABLE_PROPS].forEach(function (prop) {
-                    _this[POSTABLE_OBSERVE_DISPOSERS].add(observe(_this, prop, function (change) {
+                    _this[POSTABLE_ADMINISTRATOR].observeDisposers.add(observe(_this, prop, function (change) {
                         if (change.type == 'update') {
                             var oldValue = change.oldValue;
                             if (isObject(oldValue))
@@ -75,8 +70,8 @@ function postable(target, prop) {
                                 ref(postable_1);
                             }
                             postMessage({
-                                type: 'object-updated',
-                                object: _this[POSTABLE_ID_SYMBOL],
+                                type: MessageType.OBJECT_UPDTAED,
+                                object: _this[POSTABLE_ADMINISTRATOR].id,
                                 property: prop,
                                 value: serialize(value)
                             });
@@ -96,15 +91,15 @@ function postable(target, prop) {
                     if (typeof value == 'object' && value != null)
                         unref(value);
                 });
-                this[POSTABLE_OBSERVE_DISPOSERS].forEach(function (disposer) {
+                this[POSTABLE_ADMINISTRATOR].observeDisposers.forEach(function (disposer) {
                     disposer();
                 });
                 postMessage({
-                    type: 'object-destroied',
-                    id: this[POSTABLE_ID_SYMBOL]
+                    type: MessageType.OBJECT_DESTROIED,
+                    id: this[POSTABLE_ADMINISTRATOR].id
                 });
-                this[POSTABLE_OBSERVE_DISPOSERS].forEach(function (disposer) { return disposer(); });
-                this[POSTABLE_OBSERVE_DISPOSERS].clear();
+                this[POSTABLE_ADMINISTRATOR].observeDisposers.forEach(function (disposer) { return disposer(); });
+                this[POSTABLE_ADMINISTRATOR].observeDisposers.clear();
             }
         });
     }
@@ -123,12 +118,11 @@ Object.defineProperty(Array.prototype, POSTABLE_FUNC_POST_CREATED, {
             values.push(serialize(el));
         });
         postMessage({
-            type: 'object-created',
-            constructor: this.constructor.name,
-            id: this[POSTABLE_ID_SYMBOL],
+            type: MessageType.ARRAY_CREATED,
+            id: this[POSTABLE_ADMINISTRATOR].id,
             values: values
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].add(observeArray(this));
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.add(observeArray(this));
     }
 });
 Object.defineProperty(Array.prototype, POSTABLE_FUNC_POST_DESTROIED, {
@@ -140,15 +134,15 @@ Object.defineProperty(Array.prototype, POSTABLE_FUNC_POST_DESTROIED, {
             if (isObject(el))
                 unref(el);
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].forEach(function (disposer) {
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.forEach(function (disposer) {
             disposer();
         });
         postMessage({
-            type: 'object-destroied',
-            id: this[POSTABLE_ID_SYMBOL]
+            type: MessageType.ARRAY_DESTROIED,
+            id: this[POSTABLE_ADMINISTRATOR].id
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].forEach(function (disposer) { return disposer(); });
-        this[POSTABLE_OBSERVE_DISPOSERS].clear();
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.forEach(function (disposer) { return disposer(); });
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.clear();
     }
 });
 Object.defineProperty(ObservableSet.prototype, POSTABLE_FUNC_POST_CREATED, {
@@ -163,12 +157,11 @@ Object.defineProperty(ObservableSet.prototype, POSTABLE_FUNC_POST_CREATED, {
             values.push(serialize(el));
         });
         postMessage({
-            type: 'object-created',
-            constructor: this.constructor.name,
-            id: this[POSTABLE_ID_SYMBOL],
+            type: MessageType.SET_CREATED,
+            id: this[POSTABLE_ADMINISTRATOR].id,
             values: values
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].add(observeSet(this));
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.add(observeSet(this));
     }
 });
 Object.defineProperty(ObservableSet.prototype, POSTABLE_FUNC_POST_DESTROIED, {
@@ -180,15 +173,15 @@ Object.defineProperty(ObservableSet.prototype, POSTABLE_FUNC_POST_DESTROIED, {
             if (isObject(el))
                 unref(el);
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].forEach(function (disposer) {
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.forEach(function (disposer) {
             disposer();
         });
         postMessage({
-            type: 'object-destroied',
-            id: this[POSTABLE_ID_SYMBOL]
+            type: MessageType.SET_DESTROIED,
+            id: this[POSTABLE_ADMINISTRATOR].id
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].forEach(function (disposer) { return disposer(); });
-        this[POSTABLE_OBSERVE_DISPOSERS].clear();
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.forEach(function (disposer) { return disposer(); });
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.clear();
     }
 });
 Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_CREATED, {
@@ -205,12 +198,11 @@ Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_CREATED, {
             values.push([serialize(k), serialize(v)]);
         });
         postMessage({
-            type: 'object-created',
-            constructor: this.constructor.name,
-            id: this[POSTABLE_ID_SYMBOL],
+            type: MessageType.MAP_CREATED,
+            id: this[POSTABLE_ADMINISTRATOR].id,
             values: values
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].add(observeMap(this));
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.add(observeMap(this));
     }
 });
 Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_DESTROIED, {
@@ -224,57 +216,49 @@ Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_DESTROIED, {
             if (isObject(v))
                 unref(v);
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].forEach(function (disposer) {
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.forEach(function (disposer) {
             disposer();
         });
         postMessage({
-            type: 'object-destroied',
-            id: this[POSTABLE_ID_SYMBOL]
+            type: MessageType.MAP_DESTROIED,
+            id: this[POSTABLE_ADMINISTRATOR].id
         });
-        this[POSTABLE_OBSERVE_DISPOSERS].forEach(function (disposer) { return disposer(); });
-        this[POSTABLE_OBSERVE_DISPOSERS].clear();
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.forEach(function (disposer) { return disposer(); });
+        this[POSTABLE_ADMINISTRATOR].observeDisposers.clear();
     }
 });
 function asPostableObject(target) {
     if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED))
         return null;
-    if (target.hasOwnProperty(POSTABLE_ID_SYMBOL))
+    if (target.hasOwnProperty(POSTABLE_ADMINISTRATOR))
         return target;
-    Object.defineProperty(target, POSTABLE_ID_SYMBOL, {
+    Object.defineProperty(target, POSTABLE_ADMINISTRATOR, {
         enumerable: false,
         writable: false,
         configurable: false,
-        value: getNextPostableObjectID()
-    });
-    Object.defineProperty(target, POSTABLE_REF_COUNT, {
-        enumerable: false,
-        writable: true,
-        configurable: false,
-        value: 0
-    });
-    Object.defineProperty(target, POSTABLE_OBSERVE_DISPOSERS, {
-        enumerable: false,
-        writable: false,
-        configurable: false,
-        value: new Set()
+        value: {
+            id: getNextPostableObjectID(),
+            refCount: 0,
+            observeDisposers: new Set()
+        }
     });
     return target;
 }
 function ref(object) {
-    if (object[POSTABLE_REF_COUNT] == 0)
+    if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
         object[POSTABLE_FUNC_POST_CREATED].call(object);
-    object[POSTABLE_REF_COUNT]++;
+    object[POSTABLE_ADMINISTRATOR].refCount++;
 }
 function unref(object) {
-    object[POSTABLE_REF_COUNT]--;
-    if (object[POSTABLE_REF_COUNT] == 0)
+    object[POSTABLE_ADMINISTRATOR].refCount--;
+    if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
         object[POSTABLE_FUNC_POST_DESTROIED].call(object);
 }
 function serialize(d) {
     return (typeof d == 'object' ?
         {
             valueType: 'object',
-            value: d[POSTABLE_ID_SYMBOL]
+            value: d[POSTABLE_ADMINISTRATOR].id
         } : {
         valueType: 'primitive',
         value: d
@@ -295,8 +279,8 @@ function postMapUpdate(c) {
         ref(c.newValue);
     if (isObject(c.oldValue))
         unref(c.oldValue);
-    c.type = 'map-update';
-    c.object = c.object[POSTABLE_ID_SYMBOL];
+    c.type = MessageType.MAP_UPDATED;
+    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.name = serialize(c.name);
     c.newValue = serialize(c.newValue);
     c.oldValue = serialize(c.oldValue);
@@ -305,8 +289,8 @@ function postMapUpdate(c) {
 function postMapAdd(c) {
     if (isObject(c.newValue))
         ref(c.newValue);
-    c.type = 'map-add';
-    c.object = c.object[POSTABLE_ID_SYMBOL];
+    c.type = MessageType.MAP_ADDED;
+    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.name = serialize(c.name);
     c.newValue = serialize(c.newValue);
     postMessage(c);
@@ -314,8 +298,8 @@ function postMapAdd(c) {
 function postMapDelete(c) {
     if (isObject(c.oldValue))
         unref(c.oldValue);
-    c.type = 'map-delete';
-    c.object = c.object[POSTABLE_ID_SYMBOL];
+    c.type = MessageType.MAP_DELETED;
+    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.name = serialize(c.name);
     c.oldValue = serialize(c.oldValue);
     postMessage(c);
@@ -331,16 +315,16 @@ function observeSet(data) {
 function postSetAdd(c) {
     if (isObject(c.newValue))
         ref(c.newValue);
-    c.type = 'set-add';
-    c.object = c.object[POSTABLE_ID_SYMBOL];
+    c.type = MessageType.SET_ADDED;
+    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.newValue = serialize(c.newValue);
     postMessage(c);
 }
 function postSetDelete(c) {
     if (isObject(c.oldValue))
         unref(c.oldValue);
-    c.type = 'set-delete';
-    c.object = c.object[POSTABLE_ID_SYMBOL];
+    c.type = MessageType.SET_DELETED;
+    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.oldValue = serialize(c.oldvalue);
     postMessage(c);
 }
@@ -357,15 +341,15 @@ function postArrayUpdate(c) {
         ref(c.newValue);
     if (isObject(c.oldValue))
         unref(c.oldValue);
-    c.type = 'array-update';
-    c.object = c.object[POSTABLE_ID_SYMBOL];
+    c.type = MessageType.ARRAY_UPDATED;
+    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.newValue = serialize(c.newValue);
     c.oldValue = serialize(c.oldValue);
     postMessage(c);
 }
 function postArraySplice(c) {
-    c.type = 'array-splice';
-    c.object = c.object[POSTABLE_ID_SYMBOL];
+    c.type = MessageType.ARRAY_SPLICED;
+    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.added = c.added.map(function (d) {
         if (isObject(d))
             ref(d);

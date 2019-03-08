@@ -66,7 +66,7 @@ class ClassNode {
 
 function generate(sourceFiles: Array<ts.SourceFile>): string {
   let usingClasses = new Set<string>();
-  let classess = new Array<ts.ClassDeclaration>();
+  let classess = new Array<ts.InterfaceDeclaration>();
   sourceFiles.forEach(node => {
     __pregenerate(node, usingClasses);
     __generate(node, usingClasses, classess);
@@ -102,22 +102,13 @@ function __pregenerate(node: ts.Node, usingClasses: Set<string>) {
     if (node.decorators) node.decorators.forEach(deco => {
       if (deco.expression.getText() == 'Postable') postable = true;
     })
-    if (postable) {
-      usingClasses.add(node.name.getText());
-      if (node.heritageClauses) node.heritageClauses.forEach(hc => {
-        hc.types.forEach(t => {
-          if (t) {
-            usingClasses.add(t.getText())
-          }
-        })
-      })
-    }
+    if (postable) usingClasses.add(node.name.getText());
   }
 
   generate(node);
 }
 
-function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.ClassDeclaration>) {
+function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.InterfaceDeclaration>) {
 
   function generate(node: ts.Node): void {
     if (ts.isClassDeclaration(node)) return visitClassDeclaration(node);
@@ -126,17 +117,26 @@ function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.C
   
   function visitClassDeclaration(node: ts.ClassDeclaration): void {
     if (!usingClasses.has(node.name.getText())) return;
-    let properties: Array<ts.PropertyDeclaration> = [];
+    let properties: Array<ts.TypeElement> = [];
     ts.forEachChild(node, cbNode => {
       if (ts.isPropertyDeclaration(cbNode)) {
         let n = visitPropertyDeclaration(cbNode);
         if (n) properties.push(n);
       }
     });
-    result.push(ts.createClassDeclaration(null, null, node.name, null, null, properties));
+    let impls = [];
+    if (node.heritageClauses) node.heritageClauses.forEach(hc => {
+      hc.types.forEach(t => {
+        if (t) {
+          if (usingClasses.has(t.getText())) impls.push(t);
+        }
+      })
+    })
+    let heritage = impls.length ? [ts.createHeritageClause(ts.SyntaxKind.ExtendsKeyword, impls)] : null
+    result.push(ts.createInterfaceDeclaration(null, null, node.name, null, heritage, properties));
   }
 
-  function visitPropertyDeclaration(node: ts.PropertyDeclaration): ts.PropertyDeclaration {
+  function visitPropertyDeclaration(node: ts.PropertyDeclaration): ts.TypeElement {
     let postable = false;
     if (node.decorators) {
       node.decorators.forEach(deco => {
@@ -144,23 +144,24 @@ function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.C
       })
     }
     if (postable)
-      return ts.createProperty(null, null, node.name.getText(), node.questionToken, node.type, null);
+      return ts.createPropertySignature(null, node.name.getText(), node.questionToken, node.type, null);
     return null;
   }
 
   generate(node);
 }
 
-function __generateExports(classes: Array<ts.ClassDeclaration>): ts.ExportDeclaration {
+function __generateExports(classes: Array<ts.InterfaceDeclaration>): ts.ExportDeclaration {
   let specs = [];
   classes.forEach(node => {
-    specs.push(ts.createExportSpecifier(node.name.getText(), node.name.getText()));
+    specs.push(ts.createExportSpecifier(node.name.getText(), 'I' + node.name.getText()));
   })
-  specs.push(ts.createExportSpecifier('registerPostable', 'registerPostable'));
+  // specs.push(ts.createExportSpecifier('registerPostable', 'registerPostable'));
   return ts.createExportDeclaration(null, null, ts.createNamedExports(specs));
 }
 
-function __generateRegister(classes: Array<ts.ClassDeclaration>): string {
+function __generateRegister(classes: Array<ts.InterfaceDeclaration>): string {
+  return '';
   var str = '';
   for (var i = 0; i < classes.length; i ++) {
     var node = classes[i];
