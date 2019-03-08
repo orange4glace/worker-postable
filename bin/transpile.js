@@ -79,9 +79,21 @@ function __pregenerate(node, usingClasses) {
     function generate(node) {
         if (ts.isClassDeclaration(node))
             return visitClassDeclaration(node);
+        if (ts.isEnumDeclaration(node))
+            return visitEnumDeclaration(node);
         ts.forEachChild(node, generate);
     }
     function visitClassDeclaration(node) {
+        var postable = false;
+        if (node.decorators)
+            node.decorators.forEach(function (deco) {
+                if (deco.expression.getText() == 'Postable')
+                    postable = true;
+            });
+        if (postable)
+            usingClasses.add(node.name.getText());
+    }
+    function visitEnumDeclaration(node) {
         var postable = false;
         if (node.decorators)
             node.decorators.forEach(function (deco) {
@@ -97,7 +109,19 @@ function __generate(node, usingClasses, result) {
     function generate(node) {
         if (ts.isClassDeclaration(node))
             return visitClassDeclaration(node);
+        if (ts.isEnumDeclaration(node))
+            return visitEnumDeclaration(node);
         ts.forEachChild(node, generate);
+    }
+    function visitEnumDeclaration(node) {
+        if (!usingClasses.has(node.name.getText()))
+            return;
+        var members = [];
+        node.members.forEach(function (mem) {
+            var m = ts.createEnumMember(mem.name, null);
+            members.push(m);
+        });
+        result.push(ts.createEnumDeclaration(null, null, node.name, members));
     }
     function visitClassDeclaration(node) {
         if (!usingClasses.has(node.name.getText()))
@@ -115,18 +139,21 @@ function __generate(node, usingClasses, result) {
                     properties.push(n);
             }
         });
-        var impls = [];
+        var modifiers = [];
+        if (node.modifiers)
+            node.modifiers.forEach(function (m) {
+                if (m.kind == ts.SyntaxKind.AbstractKeyword)
+                    modifiers.push(m);
+            });
+        var heritages = [];
         if (node.heritageClauses)
             node.heritageClauses.forEach(function (hc) {
-                hc.types.forEach(function (t) {
-                    if (t) {
-                        if (usingClasses.has(t.getText()))
-                            impls.push(t);
-                    }
-                });
+                if (hc.token != ts.SyntaxKind.ExtendsKeyword)
+                    return;
+                heritages.push(hc);
             });
         var heritage = node.heritageClauses;
-        result.push(ts.createClassDeclaration(null, null, node.name, node.typeParameters, heritage, properties));
+        result.push(ts.createClassDeclaration(null, modifiers, node.name, node.typeParameters, heritages, properties));
     }
     function visitPropertyDeclaration(node) {
         var postable = false;
@@ -137,7 +164,7 @@ function __generate(node, usingClasses, result) {
             });
         }
         if (postable)
-            return ts.createProperty(null, null, node.name.getText(), node.questionToken, node.type, null);
+            return ts.createProperty(null, node.modifiers, node.name.getText(), node.questionToken, node.type, null);
         return null;
     }
     function visitMethodDeclaration(node) {
@@ -149,7 +176,7 @@ function __generate(node, usingClasses, result) {
             });
         }
         if (postable)
-            return ts.createMethod(null, null, node.asteriskToken, node.name, node.questionToken, node.typeParameters, node.parameters, node.type, ts.getMutableClone(node.body));
+            return ts.createMethod(null, node.modifiers, node.asteriskToken, node.name, node.questionToken, node.typeParameters, node.parameters, node.type, node.body);
         return null;
     }
     generate(node);

@@ -1,6 +1,6 @@
 {
   "name": "worker-postable",
-  "version": "1.2.2",
+  "version": "1.2.6",
   "description": "Automatically clone main thread data to worker thread",
   "keywords": [
     "web-worker",

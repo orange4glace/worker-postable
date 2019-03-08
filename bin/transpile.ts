@@ -95,6 +95,7 @@ function generate(sourceFiles: Array<ts.SourceFile>): string {
 function __pregenerate(node: ts.Node, usingClasses: Set<string>) {
   function generate(node: ts.Node): void {
     if (ts.isClassDeclaration(node)) return visitClassDeclaration(node);
+    if (ts.isEnumDeclaration(node)) return visitEnumDeclaration(node);
     ts.forEachChild(node, generate);
   }
   
@@ -105,15 +106,34 @@ function __pregenerate(node: ts.Node, usingClasses: Set<string>) {
     })
     if (postable) usingClasses.add(node.name.getText());
   }
+  
+  function visitEnumDeclaration(node: ts.EnumDeclaration): void {
+    let postable = false;
+    if (node.decorators) node.decorators.forEach(deco => {
+      if (deco.expression.getText() == 'Postable') postable = true;
+    })
+    if (postable) usingClasses.add(node.name.getText());
+  }
 
   generate(node);
 }
 
-function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.ClassDeclaration>) {
+function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.Node>) {
 
   function generate(node: ts.Node): void {
     if (ts.isClassDeclaration(node)) return visitClassDeclaration(node);
+    if (ts.isEnumDeclaration(node)) return visitEnumDeclaration(node);
     ts.forEachChild(node, generate);
+  }
+
+  function visitEnumDeclaration(node: ts.EnumDeclaration): void {
+    if (!usingClasses.has(node.name.getText())) return;
+    let members: Array<ts.EnumMember> = [];
+    node.members.forEach(mem => {
+      let m = ts.createEnumMember(mem.name, null);
+      members.push(m);
+    })
+    result.push(ts.createEnumDeclaration(null, null, node.name, members));
   }
   
   function visitClassDeclaration(node: ts.ClassDeclaration): void {
@@ -129,16 +149,17 @@ function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.C
         if (n) properties.push(n);
       }
     });
-    let impls = [];
+    let modifiers: Array<ts.Modifier> = [];
+    if (node.modifiers) node.modifiers.forEach(m => {
+      if (m.kind == ts.SyntaxKind.AbstractKeyword) modifiers.push(m);
+    })
+    let heritages: Array<ts.HeritageClause> = [];
     if (node.heritageClauses) node.heritageClauses.forEach(hc => {
-      hc.types.forEach(t => {
-        if (t) {
-          if (usingClasses.has(t.getText())) impls.push(t);
-        }
-      })
+      if (hc.token != ts.SyntaxKind.ExtendsKeyword) return;
+      heritages.push(hc);
     })
     let heritage = node.heritageClauses;
-    result.push(ts.createClassDeclaration(null, null, node.name, node.typeParameters, heritage, properties));
+    result.push(ts.createClassDeclaration(null, modifiers, node.name, node.typeParameters, heritages, properties));
   }
 
   function visitPropertyDeclaration(node: ts.PropertyDeclaration): ts.PropertyDeclaration {
@@ -149,7 +170,7 @@ function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.C
       })
     }
     if (postable)
-      return ts.createProperty(null, null, node.name.getText(), node.questionToken, node.type, null);
+      return ts.createProperty(null, node.modifiers, node.name.getText(), node.questionToken, node.type, null);
     return null;
   }
 
@@ -161,7 +182,7 @@ function __generate(node: ts.Node, usingClasses: Set<string>, result: Array<ts.C
       })
     }
     if (postable)
-      return ts.createMethod(null, null, node.asteriskToken, node.name, node.questionToken, node.typeParameters, node.parameters, node.type, ts.getMutableClone(node.body));
+      return ts.createMethod(null, node.modifiers, node.asteriskToken, node.name, node.questionToken, node.typeParameters, node.parameters, node.type, node.body);
     return null;
   }
 

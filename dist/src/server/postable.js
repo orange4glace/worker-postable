@@ -17,16 +17,20 @@ function getNextPostableObjectID() {
     return __next_postable_object_id++;
 }
 function Postable(constructor) {
-    var handler = {
-        construct: function (target, args) {
-            var instance = Object.create(constructor.prototype);
-            target.apply(instance, args);
-            asPostableObject(instance);
-            return instance;
-        }
-    };
-    return new Proxy(constructor, handler);
 }
+/*
+function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
+  const handler:ProxyHandler<T> = {
+    construct: function(target, args) {
+      let instance = Object.create(constructor.prototype);
+      target.apply(instance, args);
+      asPostableObject(instance);
+      return instance;
+    }
+  }
+  return new Proxy(constructor, handler)
+}
+*/
 function postable(target, prop) {
     if (typeof target[prop] == 'function')
         return;
@@ -115,8 +119,10 @@ Object.defineProperty(Array.prototype, POSTABLE_FUNC_POST_CREATED, {
     value: function () {
         var values = [];
         this.forEach(function (el) {
-            if (isObject(el))
+            if (isObject(el)) {
+                asPostableObject(el);
                 ref(el);
+            }
             values.push(serialize(el));
         });
         postMessage({
@@ -154,8 +160,10 @@ Object.defineProperty(ObservableSet.prototype, POSTABLE_FUNC_POST_CREATED, {
     value: function () {
         var values = [];
         this.forEach(function (el) {
-            if (isObject(el))
+            if (isObject(el)) {
+                asPostableObject(el);
                 ref(el);
+            }
             values.push(serialize(el));
         });
         postMessage({
@@ -193,10 +201,14 @@ Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_CREATED, {
     value: function () {
         var values = [];
         this.forEach(function (k, v) {
-            if (isObject(v))
-                ref(v);
-            if (isObject(k))
+            if (isObject(k)) {
+                asPostableObject(k);
                 ref(k);
+            }
+            if (isObject(v)) {
+                asPostableObject(v);
+                ref(v);
+            }
             values.push([serialize(k), serialize(v)]);
         });
         postMessage({
@@ -277,8 +289,10 @@ function observeMap(data) {
     });
 }
 function postMapUpdate(c) {
-    if (isObject(c.newValue))
+    if (isObject(c.newValue)) {
+        asPostableObject(c.newValue);
         ref(c.newValue);
+    }
     if (isObject(c.oldValue))
         unref(c.oldValue);
     c.type = MessageType.MAP_UPDATED;
@@ -289,8 +303,10 @@ function postMapUpdate(c) {
     postMessage(c);
 }
 function postMapAdd(c) {
-    if (isObject(c.newValue))
+    if (isObject(c.newValue)) {
+        asPostableObject(c.newValue);
         ref(c.newValue);
+    }
     c.type = MessageType.MAP_ADDED;
     c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.name = serialize(c.name);
@@ -315,8 +331,10 @@ function observeSet(data) {
     });
 }
 function postSetAdd(c) {
-    if (isObject(c.newValue))
+    if (isObject(c.newValue)) {
+        asPostableObject(c.newValue);
         ref(c.newValue);
+    }
     c.type = MessageType.SET_ADDED;
     c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.newValue = serialize(c.newValue);
@@ -339,8 +357,10 @@ function observeArray(data) {
     });
 }
 function postArrayUpdate(c) {
-    if (isObject(c.newValue))
+    if (isObject(c.newValue)) {
+        asPostableObject(c.newValue);
         ref(c.newValue);
+    }
     if (isObject(c.oldValue))
         unref(c.oldValue);
     c.type = MessageType.ARRAY_UPDATED;
@@ -353,8 +373,10 @@ function postArraySplice(c) {
     c.type = MessageType.ARRAY_SPLICED;
     c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.added = c.added.map(function (d) {
-        if (isObject(d))
+        if (isObject(d)) {
+            asPostableObject(d);
             ref(d);
+        }
         serialize(d);
     });
     c.removed = c.removed.map(function (d) {

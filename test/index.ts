@@ -2,11 +2,22 @@ import { Postable, postable, ref, unref, context } from "../src/server/postable"
 import Worker from 'worker-loader!./worker';
 
 @Postable
+enum ENUM {
+  HELLO = 53,
+  WORLD
+}
+
+@Postable
 class A {
   @postable color: string;
   @postable score: number = 5;
 
   name = 'name'
+}
+
+@Postable
+abstract class ABS {
+  @postable abstract call();
 }
 
 @Postable
@@ -30,8 +41,11 @@ class D<T> {
 }
 
 @Postable
-class E extends D<number> {
+class E extends D<number> implements A {
   @postable val: D<string>;
+  color
+  score
+  name
 }
 
 let worker = new Worker();
