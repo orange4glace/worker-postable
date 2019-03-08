@@ -28,6 +28,8 @@ function Postable(constructor) {
     return new Proxy(constructor, handler);
 }
 function postable(target, prop) {
+    if (typeof target[prop] == 'function')
+        return;
     // Define property to __proto__
     if (!target.hasOwnProperty(POSTABLE_PROPS)) {
         Object.defineProperty(target, POSTABLE_PROPS, {
@@ -365,5 +367,8 @@ function postArraySplice(c) {
 function postMessage(message) {
     context.onMesssage(message);
 }
-export { Postable, postable, ref, unref, context };
+function getPostableID(object) {
+    return object[POSTABLE_ADMINISTRATOR].id;
+}
+export { Postable, postable, ref, unref, getPostableID, context };
 //# sourceMappingURL=postable.js.map

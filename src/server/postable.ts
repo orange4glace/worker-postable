@@ -40,6 +40,7 @@ function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
 }
 
 function postable(target: any, prop: string) {
+  if (typeof target[prop] == 'function') return;
   // Define property to __proto__
   if (!target.hasOwnProperty(POSTABLE_PROPS)) {
     Object.defineProperty(target, POSTABLE_PROPS, {
@@ -381,10 +382,15 @@ function postMessage(message: any) {
   context.onMesssage(message);
 }
 
+function getPostableID(object: any) {
+  return object[POSTABLE_ADMINISTRATOR].id;
+}
+
 export {
   Postable,
   postable,
   ref,
   unref,
+  getPostableID,
   context
 }

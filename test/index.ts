@@ -22,6 +22,18 @@ class C extends B {
   @postable wheel;
 }
 
+@Postable
+class D<T> {
+  @postable hel() {
+    console.log(35)
+  }
+}
+
+@Postable
+class E extends D<number> {
+  @postable val: D<string>;
+}
+
 let worker = new Worker();
 context.onMesssage = msg => {
   worker.postMessage(msg);
@@ -30,6 +42,9 @@ context.onMesssage = msg => {
 let a1 = new A();
 let b1 = new B();
 let c1 = new C();
+
+var d = new D<number>();
+console.log(d.constructor.name);
 
 ref(a1)
 a1.name = 'skir'
