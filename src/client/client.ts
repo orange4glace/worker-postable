@@ -3,13 +3,23 @@ import { ObjectCreated, MessageType, ObjectUpdated, MapUpdated, MapAdded, MapDel
 
 import { EventEmitter2 } from 'eventemitter2'
 import { invariant } from '../common/util';
+import { observable, observe, IValueDidChange, ObservableSet, ObservableMap, IReactionDisposer } from 'mobx';
+
+const POSTABLE_PROPS = Symbol('postable_props')
+const POSTABLE_ID = Symbol('postable_id')
+const POSTABLE_ADMINISTRATOR = Symbol('postable_administrator')
 
 const ObjectStore = new Map<postable_object_id_t, any>();
 const ConstructorStore = new Map<string, any>();
 const ee = new EventEmitter2();
 
-const postableMessageHandler = function (msg) {
-  const data = msg.data;
+export function Posted(name: string) {
+  return function(constructor: Function) {
+    ConstructorStore.set(name, constructor);
+  }
+}
+
+const postableMessageHandler = function (data) {
   switch (data.type) {
     case MessageType.OBJECT_CREATED:
       createObject(data);
@@ -61,6 +71,125 @@ function deserialize(d) {
   return ObjectStore.get(d.value);
 }
 
+abstract class PostableAdministrator {
+  reactions: Set<IReactionDisposer>;
+
+  constructor(instance: any) {
+    this.reactions = new Set();
+  }
+
+  addReaction(reaction: IReactionDisposer) {
+    this.reactions.add(reaction);
+  }
+  removeReaction(reaction: IReactionDisposer) {
+    invariant(this.reactions.has(reaction), '[postable] no reaction exists');
+    reaction();
+    this.reactions.delete(reaction);
+  }
+  destroy() {
+    this.reactions.forEach(reaction => reaction());
+  }
+}
+
+class ObjectPostableAdministrator extends PostableAdministrator {
+  values: any;
+
+  constructor(instance: any, props: Set<string>) {
+    super(instance);
+    let values: any = {};
+    props.forEach(prop => {
+      values[prop] = instance[prop];
+    })
+    this.values = observable(values);
+  }
+}
+
+class ContainerPostableAdministrator extends PostableAdministrator {
+
+}
+
+export function listenable(target: any, prop: string): any {
+  asListenableProptotype(target);
+  return addPostableProp(target, prop);
+}
+
+export function listen(instance: any, callback: (change: IValueDidChange<{}>) => void) {
+  asListenableObject(instance);
+  if (instance[POSTABLE_ADMINISTRATOR].hasOwnProperty('values'))
+    observe(instance[POSTABLE_ADMINISTRATOR].values, callback);
+  else observe(instance, callback);
+}
+
+function asListenableProptotype(target: any) {
+  if (target.hasOwnProperty(POSTABLE_PROPS)) return;
+  let set;
+  if (target.__proto__.hasOwnProperty(POSTABLE_PROPS))
+    set = new Set(target.__proto__[POSTABLE_PROPS]);
+  else set =  new Set();
+  Object.defineProperty(target, POSTABLE_PROPS, {
+    enumerable: false,
+    writable: true,
+    configurable: true,
+    value: set
+  })
+}
+
+function addPostableProp(target: any, prop: string) {
+  return {
+    enumerable: true,
+    configurable: true,
+    get() {
+      asListenableObject(this);
+      redefineProperty(this, prop);
+      return this[prop];
+    },
+    set(value: any) {
+      asListenableObject(this);
+      redefineProperty(this, prop);
+      this[prop] = value;
+    }
+  }
+}
+
+function redefineProperty(instance: any, prop: string) {
+  delete instance[prop];
+  Object.defineProperty(instance, prop, {
+    get() {
+      return instance[POSTABLE_ADMINISTRATOR].values[prop];
+    },
+    set(value: any) {
+      if (typeof value != 'object') {
+        instance[POSTABLE_ADMINISTRATOR].values[prop] = value;
+        return;
+      }
+      instance[POSTABLE_ADMINISTRATOR].values[prop] = value;
+      let postableID = value[POSTABLE_ID];
+      let v = instance[POSTABLE_ADMINISTRATOR].values[prop];
+      ObjectStore.set(postableID, v);
+    }
+  })
+}
+
+function asListenableObject(instance: any) {
+  if (instance.hasOwnProperty(POSTABLE_ADMINISTRATOR)) return;
+  if (instance instanceof ObservableSet ||
+      instance instanceof ObservableMap ||
+      Array.isArray(instance)) {
+    Object.defineProperty(instance, POSTABLE_ADMINISTRATOR, {
+      configurable: false,
+      enumerable: false,
+      value: new ContainerPostableAdministrator(instance)
+    })
+    return;
+  }
+  let props = instance[POSTABLE_PROPS];
+  Object.defineProperty(instance, POSTABLE_ADMINISTRATOR, {
+    configurable: false,
+    enumerable: false,
+    value: new ObjectPostableAdministrator(instance, props)
+  })
+}
+
 function createObject(data: ObjectCreated) {
   const constructor = ConstructorStore.get(data.constructor);
   invariant(constructor, `[postable] ${data.constructor} not exist`)
@@ -70,6 +199,7 @@ function createObject(data: ObjectCreated) {
     const value = deserialize(data.props[i][1]);
     object[prop] = value;
   }
+  Object.defineProperty(object, POSTABLE_ID, {value: data.id});
   ObjectStore.set(data.id, object);
 }
 
@@ -90,6 +220,7 @@ function createMap(data: MapCreated) {
     let value = deserialize(map.values[i][1]);
     map.set(key, value);
   }
+  Object.defineProperty(map, POSTABLE_ID, {value: data.id});
   ObjectStore.set(data.id, map);
 }
 
@@ -119,6 +250,7 @@ function createSet(data: SetCreated) {
     const value = deserialize(v);
     set.add(value);
   })
+  Object.defineProperty(set, POSTABLE_ID, {value: data.id});
   ObjectStore.set(data.id, set);
 }
 
@@ -138,6 +270,7 @@ function createArray(data: ArrayCreated) {
     const value = deserialize(v);
     array.push(value);
   })
+  Object.defineProperty(array, POSTABLE_ID, {value: data.id});
   ObjectStore.set(data.id, array);
 }
 

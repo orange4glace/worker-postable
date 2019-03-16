@@ -1,11 +1,32 @@
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 import { MessageType } from '../common/message-type';
 import { EventEmitter2 } from 'eventemitter2';
 import { invariant } from '../common/util';
+import { observable, observe, ObservableSet, ObservableMap } from 'mobx';
+var POSTABLE_PROPS = Symbol('postable_props');
+var POSTABLE_ID = Symbol('postable_id');
+var POSTABLE_ADMINISTRATOR = Symbol('postable_administrator');
 var ObjectStore = new Map();
 var ConstructorStore = new Map();
 var ee = new EventEmitter2();
-var postableMessageHandler = function (msg) {
-    var data = msg.data;
+export function Posted(name) {
+    return function (constructor) {
+        ConstructorStore.set(name, constructor);
+    };
+}
+var postableMessageHandler = function (data) {
     switch (data.type) {
         case MessageType.OBJECT_CREATED:
             createObject(data);
@@ -56,6 +77,123 @@ function deserialize(d) {
         return d.value;
     return ObjectStore.get(d.value);
 }
+var PostableAdministrator = /** @class */ (function () {
+    function PostableAdministrator(instance) {
+        this.reactions = new Set();
+    }
+    PostableAdministrator.prototype.addReaction = function (reaction) {
+        this.reactions.add(reaction);
+    };
+    PostableAdministrator.prototype.removeReaction = function (reaction) {
+        invariant(this.reactions.has(reaction), '[postable] no reaction exists');
+        reaction();
+        this.reactions.delete(reaction);
+    };
+    PostableAdministrator.prototype.destroy = function () {
+        this.reactions.forEach(function (reaction) { return reaction(); });
+    };
+    return PostableAdministrator;
+}());
+var ObjectPostableAdministrator = /** @class */ (function (_super) {
+    __extends(ObjectPostableAdministrator, _super);
+    function ObjectPostableAdministrator(instance, props) {
+        var _this = _super.call(this, instance) || this;
+        var values = {};
+        props.forEach(function (prop) {
+            values[prop] = instance[prop];
+        });
+        _this.values = observable(values);
+        return _this;
+    }
+    return ObjectPostableAdministrator;
+}(PostableAdministrator));
+var ContainerPostableAdministrator = /** @class */ (function (_super) {
+    __extends(ContainerPostableAdministrator, _super);
+    function ContainerPostableAdministrator() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    return ContainerPostableAdministrator;
+}(PostableAdministrator));
+export function listenable(target, prop) {
+    asListenableProptotype(target);
+    return addPostableProp(target, prop);
+}
+export function listen(instance, callback) {
+    asListenableObject(instance);
+    if (instance[POSTABLE_ADMINISTRATOR].hasOwnProperty('values'))
+        observe(instance[POSTABLE_ADMINISTRATOR].values, callback);
+    else
+        observe(instance, callback);
+}
+function asListenableProptotype(target) {
+    if (target.hasOwnProperty(POSTABLE_PROPS))
+        return;
+    var set;
+    if (target.__proto__.hasOwnProperty(POSTABLE_PROPS))
+        set = new Set(target.__proto__[POSTABLE_PROPS]);
+    else
+        set = new Set();
+    Object.defineProperty(target, POSTABLE_PROPS, {
+        enumerable: false,
+        writable: true,
+        configurable: true,
+        value: set
+    });
+}
+function addPostableProp(target, prop) {
+    return {
+        enumerable: true,
+        configurable: true,
+        get: function () {
+            asListenableObject(this);
+            redefineProperty(this, prop);
+            return this[prop];
+        },
+        set: function (value) {
+            asListenableObject(this);
+            redefineProperty(this, prop);
+            this[prop] = value;
+        }
+    };
+}
+function redefineProperty(instance, prop) {
+    delete instance[prop];
+    Object.defineProperty(instance, prop, {
+        get: function () {
+            return instance[POSTABLE_ADMINISTRATOR].values[prop];
+        },
+        set: function (value) {
+            if (typeof value != 'object') {
+                instance[POSTABLE_ADMINISTRATOR].values[prop] = value;
+                return;
+            }
+            instance[POSTABLE_ADMINISTRATOR].values[prop] = value;
+            var postableID = value[POSTABLE_ID];
+            var v = instance[POSTABLE_ADMINISTRATOR].values[prop];
+            ObjectStore.set(postableID, v);
+        }
+    });
+}
+function asListenableObject(instance) {
+    if (instance.hasOwnProperty(POSTABLE_ADMINISTRATOR))
+        return;
+    if (instance instanceof ObservableSet ||
+        instance instanceof ObservableMap ||
+        Array.isArray(instance)) {
+        Object.defineProperty(instance, POSTABLE_ADMINISTRATOR, {
+            configurable: false,
+            enumerable: false,
+            value: new ContainerPostableAdministrator(instance)
+        });
+        return;
+    }
+    var props = instance[POSTABLE_PROPS];
+    Object.defineProperty(instance, POSTABLE_ADMINISTRATOR, {
+        configurable: false,
+        enumerable: false,
+        value: new ObjectPostableAdministrator(instance, props)
+    });
+}
 function createObject(data) {
     var constructor = ConstructorStore.get(data.constructor);
     invariant(constructor, "[postable] " + data.constructor + " not exist");
@@ -65,6 +203,7 @@ function createObject(data) {
         var value = deserialize(data.props[i][1]);
         object[prop] = value;
     }
+    Object.defineProperty(object, POSTABLE_ID, { value: data.id });
     ObjectStore.set(data.id, object);
 }
 function destroyObject(data) {
@@ -82,6 +221,7 @@ function createMap(data) {
         var value = deserialize(map.values[i][1]);
         map.set(key, value);
     }
+    Object.defineProperty(map, POSTABLE_ID, { value: data.id });
     ObjectStore.set(data.id, map);
 }
 function updateMap(data) {
@@ -102,6 +242,7 @@ function createSet(data) {
         var value = deserialize(v);
         set.add(value);
     });
+    Object.defineProperty(set, POSTABLE_ID, { value: data.id });
     ObjectStore.set(data.id, set);
 }
 function addSet(data) {
@@ -118,6 +259,7 @@ function createArray(data) {
         var value = deserialize(v);
         array.push(value);
     });
+    Object.defineProperty(array, POSTABLE_ID, { value: data.id });
     ObjectStore.set(data.id, array);
 }
 function updateArray(data) {

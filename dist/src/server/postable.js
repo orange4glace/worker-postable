@@ -7,7 +7,7 @@ var POSTABLE_FUNC_POST_CREATED = Symbol('postable_func_post_created');
 var POSTABLE_FUNC_POST_DESTROIED = Symbol('postable_func_post_destroied');
 var POSTABLE_ADMINISTRATOR = Symbol('postable_administrator');
 var context = {
-    onMesssage: function () { }
+    onMessage: function () { }
 };
 function isObject(value) {
     return (typeof value === 'object' && value != null);
@@ -16,7 +16,17 @@ var __next_postable_object_id = 0;
 function getNextPostableObjectID() {
     return __next_postable_object_id++;
 }
-function Postable(constructor) {
+function Postable /*<T extends {new(...args:any[]):{}}>*/(constructor /*:T*/) {
+    asPostablePrototype(constructor.prototype);
+    var handler /*:ProxyHandler<T>*/ = {
+        construct: function (target, args) {
+            var instance = Object.create(constructor.prototype);
+            target.apply(instance, args);
+            asPostableObject(instance);
+            return instance;
+        }
+    };
+    return new Proxy(constructor, handler);
 }
 /*
 function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
@@ -34,13 +44,23 @@ function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
 function postable(target, prop) {
     if (typeof target[prop] == 'function')
         return;
+    asPostablePrototype(target);
     // Define property to __proto__
+    target[POSTABLE_PROPS].add(prop);
+    return observable(target, prop);
+}
+function asPostablePrototype(target) {
     if (!target.hasOwnProperty(POSTABLE_PROPS)) {
+        var set = void 0;
+        if (target.__proto__.hasOwnProperty(POSTABLE_PROPS))
+            set = new Set(target.__proto__[POSTABLE_PROPS]);
+        else
+            set = new Set();
         Object.defineProperty(target, POSTABLE_PROPS, {
             enumerable: false,
             writable: true,
             configurable: true,
-            value: new Set()
+            value: set
         });
         Object.defineProperty(target, POSTABLE_FUNC_POST_CREATED, {
             enumerable: false,
@@ -109,8 +129,23 @@ function postable(target, prop) {
             }
         });
     }
-    target[POSTABLE_PROPS].add(prop);
-    return observable(target, prop);
+}
+function asPostableObject(target) {
+    if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED))
+        return null;
+    if (target.hasOwnProperty(POSTABLE_ADMINISTRATOR))
+        return target;
+    Object.defineProperty(target, POSTABLE_ADMINISTRATOR, {
+        enumerable: false,
+        writable: false,
+        configurable: false,
+        value: {
+            id: getNextPostableObjectID(),
+            refCount: 0,
+            observeDisposers: new Set()
+        }
+    });
+    return target;
 }
 Object.defineProperty(Array.prototype, POSTABLE_FUNC_POST_CREATED, {
     enumerable: false,
@@ -241,23 +276,6 @@ Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_DESTROIED, {
         this[POSTABLE_ADMINISTRATOR].observeDisposers.clear();
     }
 });
-function asPostableObject(target) {
-    if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED))
-        return null;
-    if (target.hasOwnProperty(POSTABLE_ADMINISTRATOR))
-        return target;
-    Object.defineProperty(target, POSTABLE_ADMINISTRATOR, {
-        enumerable: false,
-        writable: false,
-        configurable: false,
-        value: {
-            id: getNextPostableObjectID(),
-            refCount: 0,
-            observeDisposers: new Set()
-        }
-    });
-    return target;
-}
 function ref(object) {
     if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
         object[POSTABLE_FUNC_POST_CREATED].call(object);
@@ -269,7 +287,7 @@ function unref(object) {
         object[POSTABLE_FUNC_POST_DESTROIED].call(object);
 }
 function serialize(d) {
-    return (typeof d == 'object' ?
+    return (isObject(d) ?
         {
             valueType: 'object',
             value: d[POSTABLE_ADMINISTRATOR].id
@@ -387,7 +405,7 @@ function postArraySplice(c) {
     postMessage(c);
 }
 function postMessage(message) {
-    context.onMesssage(message);
+    context.onMessage(message);
 }
 function getPostableID(object) {
     return object[POSTABLE_ADMINISTRATOR].id;

@@ -1,26 +1,24 @@
-import { ConstructorStore, postableMessageHandler } from '../src/client/client'
+import { Posted, listen, ConstructorStore, postableMessageHandler, ObjectStore, listenable } from '../src/client/client'
+import a from './retest';
 
-import { IA, IB, IC } from './worker-postable-generated'
+@Posted('A')
+class A {
+  @listenable a;
 
-class A implements IA {
-  color: string;
-  score: number;
+  constructor() {
+    listen(this, (change: any) => {
+      console.log(change)
+      if (change.type == 'update' && change.name == 'a') {
+        let os = change.newValue;
+        listen(os, change => console.log(change))
+      }
+    });
+  }
 }
 
-class B implements IB {
-  name;
-  grade;
+self.onmessage = e => {
+  console.log(e.data);
+  postableMessageHandler(e.data);
 }
 
-class C extends B implements IC {
-  wheel;
-}
-
-ConstructorStore.set('A', A)
-ConstructorStore.set('B', A)
-ConstructorStore.set('C', A)
-
-self.onmessage = msg => {
-  console.log(msg.data);
-  postableMessageHandler(msg)
-}
+console.log(ObjectStore);
