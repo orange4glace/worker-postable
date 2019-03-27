@@ -120,10 +120,13 @@ export function listenable(target, prop) {
 }
 export function listen(instance, callback) {
     asListenableObject(instance);
-    if (instance[POSTABLE_ADMINISTRATOR].hasOwnProperty('values'))
-        observe(instance[POSTABLE_ADMINISTRATOR].values, callback);
+    var disposer;
+    var admin = instance[POSTABLE_ADMINISTRATOR];
+    if (admin.hasOwnProperty('values'))
+        disposer = observe(admin.values, callback);
     else
-        observe(instance, callback);
+        disposer = observe(instance, callback);
+    admin.addReaction(disposer);
 }
 function asListenableProptotype(target) {
     if (target.hasOwnProperty(POSTABLE_PROPS))

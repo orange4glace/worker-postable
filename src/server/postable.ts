@@ -327,16 +327,21 @@ function postMapUpdate(c: any) {
     asPostableObject(c.newValue);
     ref(c.newValue);
   }
-  if (isObject(c.oldValue)) unref(c.oldValue);
+  let u = c.oldValue;
   c.type = MessageType.MAP_UPDATED;
   c.object = c.object[POSTABLE_ADMINISTRATOR].id;
   c.name = serialize(c.name);
   c.newValue = serialize(c.newValue);
   c.oldValue = serialize(c.oldValue);
   postMessage(c);
+  if (isObject(u)) unref(u);
 }
 
 function postMapAdd(c: any) {
+  if (isObject(c.name)) {
+    asPostableObject(c.name);
+    ref(c.name);
+  }
   if (isObject(c.newValue)) {
     asPostableObject(c.newValue);
     ref(c.newValue);
@@ -349,12 +354,13 @@ function postMapAdd(c: any) {
 }
 
 function postMapDelete(c: any) {
-  if (isObject(c.oldValue)) unref(c.oldValue);
   c.type = MessageType.MAP_DELETED;
   c.object = c.object[POSTABLE_ADMINISTRATOR].id;
   c.name = serialize(c.name);
   c.oldValue = serialize(c.oldValue);
   postMessage(c);
+  if (isObject(c.oldValue)) unref(c.oldValue);
+  if (isObject(c.name)) unref(c.name);
 }
 
 
@@ -378,11 +384,11 @@ function postSetAdd(c: any) {
 }
 
 function postSetDelete(c: any) {
-  if (isObject(c.oldValue)) unref(c.oldValue);
   c.type = MessageType.SET_DELETED;
   c.object = c.object[POSTABLE_ADMINISTRATOR].id;
   c.oldValue = serialize(c.oldvalue);
   postMessage(c);
+  if (isObject(c.oldValue)) unref(c.oldValue);
 }
 
 
@@ -399,12 +405,13 @@ function postArrayUpdate(c: any) {
     asPostableObject(c.newValue);
     ref(c.newValue);
   }
-  if (isObject(c.oldValue)) unref(c.oldValue);
+  let u = c.oldValue;
   c.type = MessageType.ARRAY_UPDATED;
   c.object = c.object[POSTABLE_ADMINISTRATOR].id;
   c.newValue = serialize(c.newValue);
   c.oldValue = serialize(c.oldValue);
   postMessage(c);
+  if (isObject(u)) unref(u);
 }
 
 function postArraySplice(c: any) {
@@ -417,11 +424,13 @@ function postArraySplice(c: any) {
     }
     serialize(d)
   })
+  let unrefs = [];
   c.removed = c.removed.map(d => {
-    if (isObject(d)) unref(d);
+    if (isObject(d)) unrefs.push(d);
     serialize(d)
   })
   postMessage(c);
+  unrefs.forEach(u => unref(u));
 }
 
 

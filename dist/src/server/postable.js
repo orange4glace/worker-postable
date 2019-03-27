@@ -311,16 +311,21 @@ function postMapUpdate(c) {
         asPostableObject(c.newValue);
         ref(c.newValue);
     }
-    if (isObject(c.oldValue))
-        unref(c.oldValue);
+    var u = c.oldValue;
     c.type = MessageType.MAP_UPDATED;
     c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.name = serialize(c.name);
     c.newValue = serialize(c.newValue);
     c.oldValue = serialize(c.oldValue);
     postMessage(c);
+    if (isObject(u))
+        unref(u);
 }
 function postMapAdd(c) {
+    if (isObject(c.name)) {
+        asPostableObject(c.name);
+        ref(c.name);
+    }
     if (isObject(c.newValue)) {
         asPostableObject(c.newValue);
         ref(c.newValue);
@@ -332,13 +337,15 @@ function postMapAdd(c) {
     postMessage(c);
 }
 function postMapDelete(c) {
-    if (isObject(c.oldValue))
-        unref(c.oldValue);
     c.type = MessageType.MAP_DELETED;
     c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.name = serialize(c.name);
     c.oldValue = serialize(c.oldValue);
     postMessage(c);
+    if (isObject(c.oldValue))
+        unref(c.oldValue);
+    if (isObject(c.name))
+        unref(c.name);
 }
 function observeSet(data) {
     return observe(data, function (change) {
@@ -359,12 +366,12 @@ function postSetAdd(c) {
     postMessage(c);
 }
 function postSetDelete(c) {
-    if (isObject(c.oldValue))
-        unref(c.oldValue);
     c.type = MessageType.SET_DELETED;
     c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.oldValue = serialize(c.oldvalue);
     postMessage(c);
+    if (isObject(c.oldValue))
+        unref(c.oldValue);
 }
 function observeArray(data) {
     return observe(data, function (change) {
@@ -379,13 +386,14 @@ function postArrayUpdate(c) {
         asPostableObject(c.newValue);
         ref(c.newValue);
     }
-    if (isObject(c.oldValue))
-        unref(c.oldValue);
+    var u = c.oldValue;
     c.type = MessageType.ARRAY_UPDATED;
     c.object = c.object[POSTABLE_ADMINISTRATOR].id;
     c.newValue = serialize(c.newValue);
     c.oldValue = serialize(c.oldValue);
     postMessage(c);
+    if (isObject(u))
+        unref(u);
 }
 function postArraySplice(c) {
     c.type = MessageType.ARRAY_SPLICED;
@@ -397,12 +405,14 @@ function postArraySplice(c) {
         }
         serialize(d);
     });
+    var unrefs = [];
     c.removed = c.removed.map(function (d) {
         if (isObject(d))
-            unref(d);
+            unrefs.push(d);
         serialize(d);
     });
     postMessage(c);
+    unrefs.forEach(function (u) { return unref(u); });
 }
 function postMessage(message) {
     context.onMessage(message);

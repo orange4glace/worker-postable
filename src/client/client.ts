@@ -3,7 +3,7 @@ import { ObjectCreated, MessageType, ObjectUpdated, MapUpdated, MapAdded, MapDel
 
 import { EventEmitter2 } from 'eventemitter2'
 import { invariant } from '../common/util';
-import { observable, observe, IValueDidChange, ObservableSet, ObservableMap, IReactionDisposer } from 'mobx';
+import { observable, observe, IValueDidChange, ObservableSet, ObservableMap, IReactionDisposer, IObjectDidChange } from 'mobx';
 
 const POSTABLE_PROPS = Symbol('postable_props')
 const POSTABLE_ID = Symbol('postable_id')
@@ -113,11 +113,14 @@ export function listenable(target: any, prop: string): any {
   return addPostableProp(target, prop);
 }
 
-export function listen(instance: any, callback: (change: IValueDidChange<{}>) => void) {
+export function listen(instance: any, callback: (change: IObjectDidChange) => void) {
   asListenableObject(instance);
-  if (instance[POSTABLE_ADMINISTRATOR].hasOwnProperty('values'))
-    observe(instance[POSTABLE_ADMINISTRATOR].values, callback);
-  else observe(instance, callback);
+  let disposer;
+  let admin = instance[POSTABLE_ADMINISTRATOR];
+  if (admin.hasOwnProperty('values'))
+    disposer = observe(admin.values, callback);
+  else disposer = observe(instance, callback);
+  admin.addReaction(disposer);
 }
 
 function asListenableProptotype(target: any) {
