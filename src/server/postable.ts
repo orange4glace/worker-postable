@@ -31,9 +31,8 @@ function getNextPostableObjectID() {
 function Postable/*<T extends {new(...args:any[]):{}}>*/(constructor/*:T*/) {
   asPostablePrototype(constructor.prototype);
   const handler/*:ProxyHandler<T>*/ = {
-    construct: function(target, args) {
-      let instance = Object.create(constructor.prototype);
-      target.apply(instance, args);
+    construct: function(target, args, newTarget) {
+      let instance = Reflect.construct(target, args, newTarget);
       asPostableObject(instance);
       return instance;
     }
