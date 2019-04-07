@@ -19,6 +19,10 @@ export function Posted(name: string) {
   }
 }
 
+export interface PostableEventListener {
+  __onPostableInstanceCreated?(): void;
+}
+
 const postableMessageHandler = function (data) {
   switch (data.type) {
     case MessageType.OBJECT_CREATED:
@@ -202,6 +206,7 @@ function createObject(data: ObjectCreated) {
     const value = deserialize(data.props[i][1]);
     object[prop] = value;
   }
+  if (typeof object.__onPostableInstanceCreated == 'function') object.__onPostableInstanceCreated();
   Object.defineProperty(object, POSTABLE_ID, {value: data.id});
   ObjectStore.set(data.id, object);
 }
