@@ -4,6 +4,9 @@ declare const ObjectStore: Map<number, any>;
 declare const ConstructorStore: Map<string, any>;
 declare const ee: EventEmitter2;
 export declare function Posted(name: string): (constructor: Function) => void;
+export interface PostableEventListener {
+    __onPostableInstanceCreated?(): void;
+}
 declare const postableMessageHandler: (data: any) => void;
 export declare function listenable(target: any, prop: string): any;
 export declare function listen(instance: any, callback: (change: IObjectDidChange) => void): void;

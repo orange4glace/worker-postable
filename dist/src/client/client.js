@@ -206,6 +206,8 @@ function createObject(data) {
         var value = deserialize(data.props[i][1]);
         object[prop] = value;
     }
+    if (typeof object.__onPostableInstanceCreated == 'function')
+        object.__onPostableInstanceCreated();
     Object.defineProperty(object, POSTABLE_ID, { value: data.id });
     ObjectStore.set(data.id, object);
 }
