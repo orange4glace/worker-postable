@@ -1,6 +1,7 @@
 # Worker-Postable
 
-worker-postable automatically clone Main thread data to WebWorker thread which depends on
+worker-postable automatically clone Main thread data to WebWorker thread.
+
 It depends on [mobx](https://github.com/mobxjs/mobx).
 
 ## Example (Typescript)
@@ -17,6 +18,7 @@ PostableContext.onMessage = msg => worker.postMessage({
 
 @Postable
 class Vector2 {
+  // @postable is also @observable.
   @postable x: number;
   @postable y: number;
 
