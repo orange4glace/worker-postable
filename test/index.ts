@@ -1,27 +1,67 @@
 import { Postable, postable, context, ref } from './../src/server/postable'
-import Worker from 'worker-loader!./worker'
 
-let worker = new Worker();
+export interface Cloneable {
+  clone(obj: Object): Object;
+}
 
-context.onMessage = e => {
-  console.log(e)
-  worker.postMessage(e)
+export function clone<T>(original: Cloneable): T {
+  let clone = Object.create(original.constructor.prototype) as T;
+  original.clone(clone);
+  return clone;
 }
 
 @Postable
-class A {
+class A implements Cloneable {
   @postable a;
+
+  clone(obj: A): Object {
+    obj.a = this.a;
+    return obj;
+  }
 }
 
-let a = new A();
+@Postable
+class B extends A {
+  @postable c: C[];
 
-ref(a);
+  constructor() {
+    super();
+    this.c = [];
+  }
 
-a.a = new Set();
+  clone(obj: B): Object {
+    super.clone(obj);
+    obj.c = [];
+    this.c.forEach(cc => obj.c.push(clone(cc)))
+    return obj;
+  }
 
-console.log(a)
+}
 
-a.a.add(53);
-a.a.add(54);
-a.a.add(55);
-a.a.add(56);
+@Postable
+class C implements Cloneable {
+  @postable val: number;
+  constructor(val: number) {
+    this.val = val;
+  }
+
+  clone(obj: C): Object {
+    obj.val = this.val;
+    return obj;
+  }
+}
+
+let c = new C(35);
+let b = new B();
+b.c.push(c);
+ref(b);
+
+let clone_b = clone<B>(b);
+console.log(c);
+console.log(b);
+console.log(clone_b);
+
+console.log(b.c == clone_b.c)
+
+ref(clone_b);
+console.log(clone_b);

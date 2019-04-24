@@ -1,6 +1,6 @@
 {
   "name": "worker-postable",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "description": "Automatically clone main thread data to worker thread",
   "repository": "orange4glace/worker-postable",
   "keywords": [

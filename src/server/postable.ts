@@ -30,14 +30,6 @@ function getNextPostableObjectID() {
 
 function Postable/*<T extends {new(...args:any[]):{}}>*/(constructor/*:T*/) {
   asPostablePrototype(constructor.prototype);
-  const handler/*:ProxyHandler<T>*/ = {
-    construct: function(target, args, newTarget) {
-      let instance = Reflect.construct(target, args, newTarget);
-      asPostableObject(instance);
-      return instance;
-    }
-  }
-  return new Proxy(constructor, handler)
 }
 /*
 function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
@@ -102,7 +94,6 @@ function asPostablePrototype(target: any) {
               let value = change.newValue as any;
               if (isObject(value)) {
                 let postable = asPostableObject(value);
-                invariant(postable, `[postable] ${value} is not a Postable object.`);
                 ref(postable);
               }
               postMessage({
@@ -143,7 +134,10 @@ function asPostablePrototype(target: any) {
 
 
 function asPostableObject(target: any) {
-  if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED)) return null;
+  if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED)) {
+    invariant(null, `[postable] ${target} is not a Postable object.`);
+    return null;
+  }
   if (target.hasOwnProperty(POSTABLE_ADMINISTRATOR)) return target;
   Object.defineProperty(target, POSTABLE_ADMINISTRATOR, {
     enumerable: false,
@@ -288,12 +282,14 @@ Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_DESTROIED, {
 })
 
 function ref(object: any) {
+  asPostableObject(object);
   if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
     object[POSTABLE_FUNC_POST_CREATED].call(object);
   object[POSTABLE_ADMINISTRATOR].refCount++;
 }
 
 function unref(object: any) {
+  asPostableObject(object);
   object[POSTABLE_ADMINISTRATOR].refCount--;
   if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
     object[POSTABLE_FUNC_POST_DESTROIED].call(object);
