@@ -322,14 +322,15 @@ function postMapUpdate(c: any) {
     asPostableObject(c.newValue);
     ref(c.newValue);
   }
-  let u = c.oldValue;
-  c.type = MessageType.MAP_UPDATED;
-  c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-  c.name = serialize(c.name);
-  c.newValue = serialize(c.newValue);
-  c.oldValue = serialize(c.oldValue);
-  postMessage(c);
-  if (isObject(u)) unref(u);
+  let message = {
+    type: MessageType.MAP_UPDATED,
+    object: c.object[POSTABLE_ADMINISTRATOR].id,
+    name: serialize(c.name),
+    newValue: serialize(c.newValue),
+    oldValue: serialize(c.oldValue)
+  }
+  postMessage(message);
+  if (isObject(c.oldValue)) unref(c.oldValue);
 }
 
 function postMapAdd(c: any) {
@@ -341,19 +342,23 @@ function postMapAdd(c: any) {
     asPostableObject(c.newValue);
     ref(c.newValue);
   }
-  c.type = MessageType.MAP_ADDED;
-  c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-  c.name = serialize(c.name);
-  c.newValue = serialize(c.newValue);
-  postMessage(c);
+  let message = {
+    type: MessageType.MAP_ADDED,
+    object: c.object[POSTABLE_ADMINISTRATOR].id,
+    name: serialize(c.name),
+    newValue: serialize(c.newValue)
+  }
+  postMessage(message);
 }
 
 function postMapDelete(c: any) {
-  c.type = MessageType.MAP_DELETED;
-  c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-  c.name = serialize(c.name);
-  c.oldValue = serialize(c.oldValue);
-  postMessage(c);
+  let message = {
+    type: MessageType.MAP_DELETED,
+    object: c.object[POSTABLE_ADMINISTRATOR].id,
+    name: serialize(c.name),
+    oldValue: serialize(c.oldValue)
+  }
+  postMessage(message);
   if (isObject(c.oldValue)) unref(c.oldValue);
   if (isObject(c.name)) unref(c.name);
 }
@@ -372,17 +377,21 @@ function postSetAdd(c: any) {
     asPostableObject(c.newValue);
     ref(c.newValue);
   }
-  c.type = MessageType.SET_ADDED;
-  c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-  c.newValue = serialize(c.newValue);
-  postMessage(c);
+  let message = {
+    type: MessageType.SET_ADDED,
+    object: c.object[POSTABLE_ADMINISTRATOR].id,
+    newValue: serialize(c.newValue)
+  }
+  postMessage(message);
 }
 
 function postSetDelete(c: any) {
-  c.type = MessageType.SET_DELETED;
-  c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-  c.oldValue = serialize(c.oldvalue);
-  postMessage(c);
+  let message = {
+    type: MessageType.SET_DELETED,
+    object: c.object[POSTABLE_ADMINISTRATOR].id,
+    oldValue: serialize(c.oldvalue)
+  }
+  postMessage(message);
   if (isObject(c.oldValue)) unref(c.oldValue);
 }
 
@@ -400,31 +409,36 @@ function postArrayUpdate(c: any) {
     asPostableObject(c.newValue);
     ref(c.newValue);
   }
-  let u = c.oldValue;
-  c.type = MessageType.ARRAY_UPDATED;
-  c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-  c.newValue = serialize(c.newValue);
-  c.oldValue = serialize(c.oldValue);
-  postMessage(c);
-  if (isObject(u)) unref(u);
+  let message = {
+    type: MessageType.ARRAY_UPDATED,
+    object: c.object[POSTABLE_ADMINISTRATOR].id,
+    newValue: serialize(c.newValue),
+    oldValue: serialize(c.oldValue)
+  }
+  postMessage(message);
+  if (isObject(c.oldValue)) unref(c.oldValue);
 }
 
 function postArraySplice(c: any) {
-  c.type = MessageType.ARRAY_SPLICED;
-  c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-  c.added = c.added.map(d => {
+  let message = {
+    type: MessageType.ARRAY_SPLICED,
+    object: c.object[POSTABLE_ADMINISTRATOR].id,
+    added: [],
+    removed: []
+  }
+  c.added.forEach(d => {
     if (isObject(d)) {
       asPostableObject(d);
       ref(d);
     }
-    serialize(d)
+    message.added.push(serialize(d));
   })
   let unrefs = [];
-  c.removed = c.removed.map(d => {
+  c.removed.forEach(d => {
     if (isObject(d)) unrefs.push(d);
-    serialize(d)
+    message.removed.push(serialize(d))
   })
-  postMessage(c);
+  postMessage(message);
   unrefs.forEach(u => unref(u));
 }
 

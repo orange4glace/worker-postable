@@ -2,7 +2,7 @@ interface Context {
     onMessage: (message: any) => void;
 }
 declare let context: Context;
-declare function Postable(constructor: any): any;
+declare function Postable(constructor: any): void;
 declare function postable(target: any, prop: string): any;
 declare function ref(object: any): void;
 declare function unref(object: any): void;

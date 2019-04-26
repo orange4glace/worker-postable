@@ -18,14 +18,6 @@ function getNextPostableObjectID() {
 }
 function Postable /*<T extends {new(...args:any[]):{}}>*/(constructor /*:T*/) {
     asPostablePrototype(constructor.prototype);
-    var handler /*:ProxyHandler<T>*/ = {
-        construct: function (target, args, newTarget) {
-            var instance = Reflect.construct(target, args, newTarget);
-            asPostableObject(instance);
-            return instance;
-        }
-    };
-    return new Proxy(constructor, handler);
 }
 /*
 function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
@@ -91,7 +83,6 @@ function asPostablePrototype(target) {
                             var value = change.newValue;
                             if (isObject(value)) {
                                 var postable_1 = asPostableObject(value);
-                                invariant(postable_1, "[postable] " + value + " is not a Postable object.");
                                 ref(postable_1);
                             }
                             postMessage({
@@ -130,8 +121,10 @@ function asPostablePrototype(target) {
     }
 }
 function asPostableObject(target) {
-    if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED))
+    if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED)) {
+        invariant(null, "[postable] " + target + " is not a Postable object.");
         return null;
+    }
     if (target.hasOwnProperty(POSTABLE_ADMINISTRATOR))
         return target;
     Object.defineProperty(target, POSTABLE_ADMINISTRATOR, {
@@ -276,11 +269,13 @@ Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_DESTROIED, {
     }
 });
 function ref(object) {
+    asPostableObject(object);
     if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
         object[POSTABLE_FUNC_POST_CREATED].call(object);
     object[POSTABLE_ADMINISTRATOR].refCount++;
 }
 function unref(object) {
+    asPostableObject(object);
     object[POSTABLE_ADMINISTRATOR].refCount--;
     if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
         object[POSTABLE_FUNC_POST_DESTROIED].call(object);
