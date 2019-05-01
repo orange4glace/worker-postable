@@ -1,4 +1,4 @@
-import { postable_object_id_t } from '../common/type_t'
+import { postable_object_id_t } from './type_t'
 
 enum MessageType {
   OBJECT_CREATED = 1,
@@ -17,6 +17,7 @@ enum MessageType {
   SET_DELETED,
   ARRAY_UPDATED,
   ARRAY_SPLICED,
+  SERVER_EVENT,
 }
 
 interface ObjectCreated {
@@ -108,6 +109,12 @@ interface ArraySpliced {
   removedCount: number
 }
 
+interface ServerEvent<T> {
+  type: number,
+  object: postable_object_id_t,
+  event: T
+}
+
 export {
   MessageType,
   ObjectCreated,
@@ -122,5 +129,6 @@ export {
   SetAdded,
   SetDelete,
   ArrayUpdated,
-  ArraySpliced
+  ArraySpliced,
+  ServerEvent
 }

@@ -1,17 +1,35 @@
-import { postable_object_id_t } from '../common/type_t'
-import { ObjectCreated, MessageType, ObjectUpdated, MapUpdated, MapAdded, MapDeleted, SetAdded, SetDelete, ArrayUpdated, ArraySpliced, MapCreated, SetCreated, ArrayCreated, ObjectDestroied } from '../common/message-type'
+import { postable_object_id_t } from '../base/type_t'
+import { ObjectCreated, MessageType, ObjectUpdated, MapUpdated, MapAdded, MapDeleted, SetAdded, SetDelete, ArrayUpdated, ArraySpliced, MapCreated, SetCreated, ArrayCreated, ObjectDestroied, ServerEvent } from '../base/message-type'
 
-import { EventEmitter2 } from 'eventemitter2'
-import { invariant } from '../common/util';
-import { observable, observe, IValueDidChange, ObservableSet, ObservableMap, IReactionDisposer, IObjectDidChange } from 'mobx';
+import { observable, observe, ObservableSet, ObservableMap, IReactionDisposer, IObjectDidChange } from 'mobx';
+import { assert } from 'base/common/assert';
+import { PostableEventBase } from 'base/common';
 
 const POSTABLE_PROPS = Symbol('postable_props')
 const POSTABLE_ID = Symbol('postable_id')
 const POSTABLE_ADMINISTRATOR = Symbol('postable_administrator')
 
-const ObjectStore = new Map<postable_object_id_t, any>();
-const ConstructorStore = new Map<string, any>();
-const ee = new EventEmitter2();
+export const ObjectStore = new Map<postable_object_id_t, any>();
+export const ConstructorStore = new Map<string, any>();
+
+function getObject<T>(id: number): T {
+  const obj = ObjectStore.get(id);
+  assert(obj, 'Object not exists. ' + id);
+  return obj;
+}
+
+function onServerEvent(data: ServerEvent<any>) {
+  const event = getObject<PostedEvent<any>>(data.object);
+  event.fire(data.event);
+}
+
+@Posted('PostableEvent')
+export class PostedEvent<T> implements PostableEventBase<T> {
+  fire(event: T) {
+    if (this.on) this.on(event);
+  }
+  on: (event: T) => void;
+}
 
 export function Posted(name: string) {
   return function(constructor: Function) {
@@ -19,11 +37,11 @@ export function Posted(name: string) {
   }
 }
 
-export interface PostableEventListener {
-  __onPostableInstanceCreated?(): void;
+export interface PostedEventListener {
+  onPostableInstanceCreated?(): void;
 }
 
-const postableMessageHandler = function (data) {
+export const postableMessageHandler = function (data) {
   switch (data.type) {
     case MessageType.OBJECT_CREATED:
       createObject(data);
@@ -67,6 +85,9 @@ const postableMessageHandler = function (data) {
     case MessageType.ARRAY_SPLICED:
       spliceArray(data);
       break;
+    case MessageType.SERVER_EVENT:
+      onServerEvent(data);
+      break;
   }
 }
 
@@ -86,7 +107,7 @@ abstract class PostableAdministrator {
     this.reactions.add(reaction);
   }
   removeReaction(reaction: IReactionDisposer) {
-    invariant(this.reactions.has(reaction), '[postable] no reaction exists');
+    assert(this.reactions.has(reaction), '[postable] no reaction exists');
     reaction();
     this.reactions.delete(reaction);
   }
@@ -199,20 +220,20 @@ function asListenableObject(instance: any) {
 
 function createObject(data: ObjectCreated) {
   const constructor = ConstructorStore.get(data.constructor);
-  invariant(constructor, `[postable] ${data.constructor} not exist`)
+  assert(constructor, `[postable] ${data.constructor} not exist`)
   const object = new constructor();
   for (var i = 0; i < data.props.length; i ++) {
     const prop = data.props[i][0];
     const value = deserialize(data.props[i][1]);
     object[prop] = value;
   }
-  if (typeof object.__onPostableInstanceCreated == 'function') object.__onPostableInstanceCreated();
+  if (typeof object.onPostableInstanceCreated == 'function') object.onPostableInstanceCreated();
   Object.defineProperty(object, POSTABLE_ID, {value: data.id});
   ObjectStore.set(data.id, object);
 }
 
 function destroyObject(data: ObjectDestroied) {
-  invariant(ObjectStore.has(data.id), `[postable] Destroy failed. No such object ${data.id}`);
+  assert(ObjectStore.has(data.id), `[postable] Destroy failed. No such object ${data.id}`);
   ObjectStore.delete(data.id);
 }
 
@@ -291,11 +312,4 @@ function spliceArray(data: ArraySpliced) {
   const object: Array<any> = ObjectStore.get(data.object);
   data.added = data.added.map(d => deserialize(d))
   object.splice(data.index, data.removedCount, data.added);
-}
-
-export {
-  ConstructorStore,
-  ObjectStore,
-  postableMessageHandler,
-  ee as eventemitter
 }

@@ -11,22 +11,48 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
-import { MessageType } from '../common/message-type';
-import { EventEmitter2 } from 'eventemitter2';
-import { invariant } from '../common/util';
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+import { MessageType } from '../base/message-type';
 import { observable, observe, ObservableSet, ObservableMap } from 'mobx';
+import { assert } from 'base/common/assert';
 var POSTABLE_PROPS = Symbol('postable_props');
 var POSTABLE_ID = Symbol('postable_id');
 var POSTABLE_ADMINISTRATOR = Symbol('postable_administrator');
-var ObjectStore = new Map();
-var ConstructorStore = new Map();
-var ee = new EventEmitter2();
+export var ObjectStore = new Map();
+export var ConstructorStore = new Map();
+function getObject(id) {
+    var obj = ObjectStore.get(id);
+    assert(obj, 'Object not exists. ' + id);
+    return obj;
+}
+function onServerEvent(data) {
+    var event = getObject(data.object);
+    event.fire(data.event);
+}
+var PostedEvent = /** @class */ (function () {
+    function PostedEvent() {
+    }
+    PostedEvent.prototype.fire = function (event) {
+        if (this.on)
+            this.on(event);
+    };
+    PostedEvent = __decorate([
+        Posted('PostableEvent')
+    ], PostedEvent);
+    return PostedEvent;
+}());
+export { PostedEvent };
 export function Posted(name) {
     return function (constructor) {
         ConstructorStore.set(name, constructor);
     };
 }
-var postableMessageHandler = function (data) {
+export var postableMessageHandler = function (data) {
     switch (data.type) {
         case MessageType.OBJECT_CREATED:
             createObject(data);
@@ -70,6 +96,9 @@ var postableMessageHandler = function (data) {
         case MessageType.ARRAY_SPLICED:
             spliceArray(data);
             break;
+        case MessageType.SERVER_EVENT:
+            onServerEvent(data);
+            break;
     }
 };
 function deserialize(d) {
@@ -85,7 +114,7 @@ var PostableAdministrator = /** @class */ (function () {
         this.reactions.add(reaction);
     };
     PostableAdministrator.prototype.removeReaction = function (reaction) {
-        invariant(this.reactions.has(reaction), '[postable] no reaction exists');
+        assert(this.reactions.has(reaction), '[postable] no reaction exists');
         reaction();
         this.reactions.delete(reaction);
     };
@@ -199,20 +228,20 @@ function asListenableObject(instance) {
 }
 function createObject(data) {
     var constructor = ConstructorStore.get(data.constructor);
-    invariant(constructor, "[postable] " + data.constructor + " not exist");
+    assert(constructor, "[postable] " + data.constructor + " not exist");
     var object = new constructor();
     for (var i = 0; i < data.props.length; i++) {
         var prop = data.props[i][0];
         var value = deserialize(data.props[i][1]);
         object[prop] = value;
     }
-    if (typeof object.__onPostableInstanceCreated == 'function')
-        object.__onPostableInstanceCreated();
+    if (typeof object.onPostableInstanceCreated == 'function')
+        object.onPostableInstanceCreated();
     Object.defineProperty(object, POSTABLE_ID, { value: data.id });
     ObjectStore.set(data.id, object);
 }
 function destroyObject(data) {
-    invariant(ObjectStore.has(data.id), "[postable] Destroy failed. No such object " + data.id);
+    assert(ObjectStore.has(data.id), "[postable] Destroy failed. No such object " + data.id);
     ObjectStore.delete(data.id);
 }
 function updateObject(data) {
@@ -276,5 +305,4 @@ function spliceArray(data) {
     data.added = data.added.map(function (d) { return deserialize(d); });
     object.splice(data.index, data.removedCount, data.added);
 }
-export { ConstructorStore, ObjectStore, postableMessageHandler, ee as eventemitter };
 //# sourceMappingURL=client.js.map

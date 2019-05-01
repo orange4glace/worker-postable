@@ -1,12 +1,18 @@
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
 import { observable, observe, ObservableSet, ObservableMap } from 'mobx';
-import { MessageType } from '../common/message-type';
-import { invariant } from '../common/util';
+import { MessageType } from '../base/message-type';
+import { assert } from 'base/common/assert';
 var DEBUG = process.env.NODE_ENV !== "production";
 var POSTABLE_PROPS = Symbol('postable_props');
 var POSTABLE_FUNC_POST_CREATED = Symbol('postable_func_post_created');
 var POSTABLE_FUNC_POST_DESTROIED = Symbol('postable_func_post_destroied');
 var POSTABLE_ADMINISTRATOR = Symbol('postable_administrator');
-var context = {
+export var context = {
     onMessage: function () { }
 };
 function isObject(value) {
@@ -16,7 +22,23 @@ var __next_postable_object_id = 0;
 function getNextPostableObjectID() {
     return __next_postable_object_id++;
 }
-function Postable /*<T extends {new(...args:any[]):{}}>*/(constructor /*:T*/) {
+var PostableEvent = /** @class */ (function () {
+    function PostableEvent() {
+    }
+    PostableEvent.prototype.emit = function (event) {
+        postMessage({
+            type: MessageType.SERVER_EVENT,
+            object: getPostableID(this),
+            event: event
+        });
+    };
+    PostableEvent = __decorate([
+        Postable
+    ], PostableEvent);
+    return PostableEvent;
+}());
+export { PostableEvent };
+export function Postable /*<T extends {new(...args:any[]):{}}>*/(constructor /*:T*/) {
     asPostablePrototype(constructor.prototype);
 }
 /*
@@ -32,7 +54,7 @@ function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
   return new Proxy(constructor, handler)
 }
 */
-function postable(target, prop) {
+export function postable(target, prop) {
     if (typeof target[prop] == 'function')
         return;
     asPostablePrototype(target);
@@ -122,7 +144,7 @@ function asPostablePrototype(target) {
 }
 function asPostableObject(target) {
     if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED)) {
-        invariant(null, "[postable] " + target + " is not a Postable object.");
+        assert(null, "[postable] " + target + " is not a Postable object.");
         return null;
     }
     if (target.hasOwnProperty(POSTABLE_ADMINISTRATOR))
@@ -268,13 +290,13 @@ Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_DESTROIED, {
         this[POSTABLE_ADMINISTRATOR].observeDisposers.clear();
     }
 });
-function ref(object) {
+export function ref(object) {
     asPostableObject(object);
     if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
         object[POSTABLE_FUNC_POST_CREATED].call(object);
     object[POSTABLE_ADMINISTRATOR].refCount++;
 }
-function unref(object) {
+export function unref(object) {
     asPostableObject(object);
     object[POSTABLE_ADMINISTRATOR].refCount--;
     if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
@@ -305,15 +327,16 @@ function postMapUpdate(c) {
         asPostableObject(c.newValue);
         ref(c.newValue);
     }
-    var u = c.oldValue;
-    c.type = MessageType.MAP_UPDATED;
-    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-    c.name = serialize(c.name);
-    c.newValue = serialize(c.newValue);
-    c.oldValue = serialize(c.oldValue);
-    postMessage(c);
-    if (isObject(u))
-        unref(u);
+    var message = {
+        type: MessageType.MAP_UPDATED,
+        object: c.object[POSTABLE_ADMINISTRATOR].id,
+        name: serialize(c.name),
+        newValue: serialize(c.newValue),
+        oldValue: serialize(c.oldValue)
+    };
+    postMessage(message);
+    if (isObject(c.oldValue))
+        unref(c.oldValue);
 }
 function postMapAdd(c) {
     if (isObject(c.name)) {
@@ -324,18 +347,22 @@ function postMapAdd(c) {
         asPostableObject(c.newValue);
         ref(c.newValue);
     }
-    c.type = MessageType.MAP_ADDED;
-    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-    c.name = serialize(c.name);
-    c.newValue = serialize(c.newValue);
-    postMessage(c);
+    var message = {
+        type: MessageType.MAP_ADDED,
+        object: c.object[POSTABLE_ADMINISTRATOR].id,
+        name: serialize(c.name),
+        newValue: serialize(c.newValue)
+    };
+    postMessage(message);
 }
 function postMapDelete(c) {
-    c.type = MessageType.MAP_DELETED;
-    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-    c.name = serialize(c.name);
-    c.oldValue = serialize(c.oldValue);
-    postMessage(c);
+    var message = {
+        type: MessageType.MAP_DELETED,
+        object: c.object[POSTABLE_ADMINISTRATOR].id,
+        name: serialize(c.name),
+        oldValue: serialize(c.oldValue)
+    };
+    postMessage(message);
     if (isObject(c.oldValue))
         unref(c.oldValue);
     if (isObject(c.name))
@@ -354,16 +381,20 @@ function postSetAdd(c) {
         asPostableObject(c.newValue);
         ref(c.newValue);
     }
-    c.type = MessageType.SET_ADDED;
-    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-    c.newValue = serialize(c.newValue);
-    postMessage(c);
+    var message = {
+        type: MessageType.SET_ADDED,
+        object: c.object[POSTABLE_ADMINISTRATOR].id,
+        newValue: serialize(c.newValue)
+    };
+    postMessage(message);
 }
 function postSetDelete(c) {
-    c.type = MessageType.SET_DELETED;
-    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-    c.oldValue = serialize(c.oldvalue);
-    postMessage(c);
+    var message = {
+        type: MessageType.SET_DELETED,
+        object: c.object[POSTABLE_ADMINISTRATOR].id,
+        oldValue: serialize(c.oldvalue)
+    };
+    postMessage(message);
     if (isObject(c.oldValue))
         unref(c.oldValue);
 }
@@ -380,39 +411,43 @@ function postArrayUpdate(c) {
         asPostableObject(c.newValue);
         ref(c.newValue);
     }
-    var u = c.oldValue;
-    c.type = MessageType.ARRAY_UPDATED;
-    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-    c.newValue = serialize(c.newValue);
-    c.oldValue = serialize(c.oldValue);
-    postMessage(c);
-    if (isObject(u))
-        unref(u);
+    var message = {
+        type: MessageType.ARRAY_UPDATED,
+        object: c.object[POSTABLE_ADMINISTRATOR].id,
+        newValue: serialize(c.newValue),
+        oldValue: serialize(c.oldValue)
+    };
+    postMessage(message);
+    if (isObject(c.oldValue))
+        unref(c.oldValue);
 }
 function postArraySplice(c) {
-    c.type = MessageType.ARRAY_SPLICED;
-    c.object = c.object[POSTABLE_ADMINISTRATOR].id;
-    c.added = c.added.map(function (d) {
+    var message = {
+        type: MessageType.ARRAY_SPLICED,
+        object: c.object[POSTABLE_ADMINISTRATOR].id,
+        added: [],
+        removed: []
+    };
+    c.added.forEach(function (d) {
         if (isObject(d)) {
             asPostableObject(d);
             ref(d);
         }
-        serialize(d);
+        message.added.push(serialize(d));
     });
     var unrefs = [];
-    c.removed = c.removed.map(function (d) {
+    c.removed.forEach(function (d) {
         if (isObject(d))
             unrefs.push(d);
-        serialize(d);
+        message.removed.push(serialize(d));
     });
-    postMessage(c);
+    postMessage(message);
     unrefs.forEach(function (u) { return unref(u); });
 }
 function postMessage(message) {
     context.onMessage(message);
 }
-function getPostableID(object) {
+export function getPostableID(object) {
     return object[POSTABLE_ADMINISTRATOR].id;
 }
-export { Postable, postable, ref, unref, getPostableID, context };
 //# sourceMappingURL=postable.js.map

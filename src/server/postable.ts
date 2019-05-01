@@ -1,6 +1,7 @@
 import { observable, IArraySplice, IArrayChange, observe, ObservableSet, ObservableMap } from 'mobx'
-import { MessageType } from '../common/message-type';
-import { invariant } from '../common/util'
+import { MessageType, ServerEvent } from '../base/message-type';
+import { assert } from 'base/common/assert';
+import { PostableEventBase } from 'base/common';
 
 const DEBUG = process.env.NODE_ENV !== "production";
 
@@ -14,7 +15,7 @@ interface Context {
   onMessage: (message: any)=>void;
 }
 
-let context: Context = {
+export const context: Context = {
   onMessage: ()=>{}
 }
 
@@ -28,7 +29,19 @@ function getNextPostableObjectID() {
 }
 
 
-function Postable/*<T extends {new(...args:any[]):{}}>*/(constructor/*:T*/) {
+@Postable
+export class PostableEvent<T> implements PostableEventBase<T> {
+  emit(event: T) {
+    postMessage({
+      type: MessageType.SERVER_EVENT,
+      object: getPostableID(this),
+      event: event
+    } as ServerEvent<T>)
+  }
+}
+
+
+export function Postable/*<T extends {new(...args:any[]):{}}>*/(constructor/*:T*/) {
   asPostablePrototype(constructor.prototype);
 }
 /*
@@ -45,7 +58,7 @@ function Postable<T extends {new(...args:any[]):{}}>(constructor:T) {
 }
 */
 
-function postable(target: any, prop: string) {
+export function postable(target: any, prop: string) {
   if (typeof target[prop] == 'function') return;
   asPostablePrototype(target);
   // Define property to __proto__
@@ -135,7 +148,7 @@ function asPostablePrototype(target: any) {
 
 function asPostableObject(target: any) {
   if (!target.__proto__.hasOwnProperty(POSTABLE_FUNC_POST_CREATED)) {
-    invariant(null, `[postable] ${target} is not a Postable object.`);
+    assert(null, `[postable] ${target} is not a Postable object.`);
     return null;
   }
   if (target.hasOwnProperty(POSTABLE_ADMINISTRATOR)) return target;
@@ -281,14 +294,14 @@ Object.defineProperty(ObservableMap.prototype, POSTABLE_FUNC_POST_DESTROIED, {
   }
 })
 
-function ref(object: any) {
+export function ref(object: any) {
   asPostableObject(object);
   if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
     object[POSTABLE_FUNC_POST_CREATED].call(object);
   object[POSTABLE_ADMINISTRATOR].refCount++;
 }
 
-function unref(object: any) {
+export function unref(object: any) {
   asPostableObject(object);
   object[POSTABLE_ADMINISTRATOR].refCount--;
   if (object[POSTABLE_ADMINISTRATOR].refCount == 0)
@@ -449,15 +462,6 @@ function postMessage(message: any) {
   context.onMessage(message);
 }
 
-function getPostableID(object: any) {
+export function getPostableID(object: any) {
   return object[POSTABLE_ADMINISTRATOR].id;
-}
-
-export {
-  Postable,
-  postable,
-  ref,
-  unref,
-  getPostableID,
-  context
 }
