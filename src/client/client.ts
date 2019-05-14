@@ -37,6 +37,9 @@ export function Posted(name: string) {
   }
 }
 
+export function posted(self: any, prop: any) {
+}
+
 export interface PostedEventListener {
   onPostableInstanceCreated?(): void;
 }
@@ -244,7 +247,7 @@ function updateObject(data: ObjectUpdated) {
 
 function createMap(data: MapCreated) {
   const map = new Map();
-  for (var i = 0; i < map.values.length; i ++) {
+  for (var i = 0; i < data.values.length; i ++) {
     let key = deserialize(map.values[i][0]);
     let value = deserialize(map.values[i][1]);
     map.set(key, value);

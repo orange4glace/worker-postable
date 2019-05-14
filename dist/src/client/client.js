@@ -52,6 +52,8 @@ export function Posted(name) {
         ConstructorStore.set(name, constructor);
     };
 }
+export function posted(self, prop) {
+}
 export var postableMessageHandler = function (data) {
     switch (data.type) {
         case MessageType.OBJECT_CREATED:

@@ -7,6 +7,7 @@ export declare class PostedEvent<T> implements PostableEventBase<T> {
     on: (event: T) => void;
 }
 export declare function Posted(name: string): (constructor: Function) => void;
+export declare function posted(self: any, prop: any): void;
 export interface PostedEventListener {
     onPostableInstanceCreated?(): void;
 }
