@@ -252,9 +252,9 @@ function updateObject(data) {
 }
 function createMap(data) {
     var map = new Map();
-    for (var i = 0; i < map.values.length; i++) {
-        var key = deserialize(map.values[i][0]);
-        var value = deserialize(map.values[i][1]);
+    for (var i = 0; i < data.values.length; i++) {
+        var key = deserialize(data.values[i][1]);
+        var value = deserialize(data.values[i][0]);
         map.set(key, value);
     }
     Object.defineProperty(map, POSTABLE_ID, { value: data.id });

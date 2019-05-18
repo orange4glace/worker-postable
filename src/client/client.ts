@@ -248,8 +248,8 @@ function updateObject(data: ObjectUpdated) {
 function createMap(data: MapCreated) {
   const map = new Map();
   for (var i = 0; i < data.values.length; i ++) {
-    let key = deserialize(map.values[i][0]);
-    let value = deserialize(map.values[i][1]);
+    let key = deserialize(data.values[i][1]);
+    let value = deserialize(data.values[i][0]);
     map.set(key, value);
   }
   Object.defineProperty(map, POSTABLE_ID, {value: data.id});
